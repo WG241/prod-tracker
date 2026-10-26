@@ -1,0 +1,85 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build
+dist
+dist-ssr
+build
+*.local
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing / coverage
+coverage
+*.lcov
+.nyc_output
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+src/generated/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# --- AI / agent tooling ---
+.cursor/
+!.cursor/rules/
+!.cursor/commands/
+.claude/
+.codex/
+.agent/
+.agents/
+.aider*
+.continue/
+.windsurf/
+.gemini/
+.copilot/
+.github/copilot-instructions.md.local
+skills-lock.json
+
+# Agent local state, transcripts, caches
+.agent-store/
+.agent_stores/
+agent-transcripts/
+.cursor-cache/
+.cursor/cache/
+*.agent.md.local
+AGENTS.local.md
+
+# Generated / scratch from agents
+.tmp/
+.temp/
+.scratch/
+.out/
+generated/
+*.generated.*
+
+/src/generated/prisma

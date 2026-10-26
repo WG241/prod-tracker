@@ -1,0 +1,20 @@
+// Prisma schema for Neon PostgreSQL
+// https://pris.ly/d/prisma-schema
+// https://neon.tech/docs/guides/prisma
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

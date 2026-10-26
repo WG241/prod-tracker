@@ -1,0 +1,464 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/*
+  Design tokens from docs/workforce-prototype-updated.html
+  rem root: 16px (Vite / Tailwind). Typography hard cap: 28px.
+*/
+
+@theme {
+  /* ========== Font family ========== */
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* ========== Font sizes ========== */
+  --text-micro: 0.5625rem; /* 9px */
+  --text-micro--line-height: 1.4;
+  --text-caption: 0.625rem; /* 10px */
+  --text-caption--line-height: 1.4;
+  --text-xs: 0.6875rem; /* 11px */
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.75rem; /* 12px */
+  --text-sm--line-height: 1.5;
+  --text-md: 0.8125rem; /* 13px */
+  --text-md--line-height: 1.5;
+  --text-base: 0.875rem; /* 14px */
+  --text-base--line-height: 1.55;
+  --text-lg: 0.9375rem; /* 15px */
+  --text-lg--line-height: 1.5;
+  --text-xl: 1rem; /* 16px */
+  --text-xl--line-height: 1.5;
+  --text-2xl: 1.125rem; /* 18px */
+  --text-2xl--line-height: 1.5;
+  --text-3xl: 1.1875rem; /* 19px */
+  --text-3xl--line-height: 1.4;
+  --text-4xl: 1.4375rem; /* 23px */
+  --text-4xl--line-height: 1.4;
+  --text-5xl: 1.6875rem; /* 27px */
+  --text-5xl--line-height: 1.3;
+  --text-6xl: 1.75rem; /* 28px cap */
+  --text-6xl--line-height: 1.3;
+  --text-display: 1.75rem; /* 28px hard cap */
+  --text-display--line-height: 1.3;
+
+  /* ========== Font weights ========== */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ========== Brand / semantic colors ========== */
+  --color-blue: #1f6fb5;
+  --color-blue-dark: #185a94;
+  --color-blue-focus: #237cc4;
+  --color-light: #f1f7fc;
+  --color-ink: #12100c;
+  --color-muted: #6b7280;
+  --color-line: #e5e7eb;
+  --color-line-soft: #edf0f3;
+  --color-bg: #f7f8fa;
+  --color-green: #166534;
+  --color-teal: #0f766e;
+  --color-amber: #92400e;
+  --color-red: #b91c1c;
+
+  /* Neutrals (text / surfaces) */
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-900: #12100c;
+  --color-border: #d1d5db;
+  --color-border-soft: #e8eef5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f9fafb;
+  --color-surface-subtle: #f8fafc;
+  --color-surface-hover: #fafcfe;
+  --color-surface-tint: #f3f4f6;
+  --color-blue-tint: #dcebf7;
+  --color-blue-soft: #e8f1f9;
+  --color-blue-wash: #e7f1f9;
+
+  /* Status surfaces */
+  --color-success-bg: #dcfce7;
+  --color-success-fg: #166534;
+  --color-warning-bg: #fffbeb;
+  --color-warning-fg: #92400e;
+  --color-warning-border: #fde68a;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-fg: #b91c1c;
+  --color-info-bg: #f1f7fc;
+  --color-info-border: #dcebf7;
+  --color-info-fg: #185a94;
+  --color-amber-banner-bg: #fffaf0;
+  --color-amber-banner-border: #f5e4bf;
+  --color-amber-banner-fg: #8c5b16;
+  --color-teal-banner-bg: #f0fdfa;
+  --color-teal-banner-border: #b8ebe1;
+  --color-open-bg: #ecfdf5;
+  --color-open-fg: #065f46;
+  --color-open-border: #a7f3d0;
+  --color-rate-mid-bg: #fef3c7;
+  --color-badge-amber-bg: #fffbeb;
+  --color-badge-amber-fg: #92400e;
+  --color-nav-count-bg: #e9b957;
+  --color-nav-count-fg: #553700;
+
+  /* Avatar tints */
+  --color-avatar-blue-bg: #dcebf7;
+  --color-avatar-blue-fg: #185a94;
+  --color-avatar-teal-bg: #e1f2ee;
+  --color-avatar-teal-fg: #287666;
+  --color-avatar-lilac-bg: #eee9f8;
+  --color-avatar-lilac-fg: #7653a3;
+  --color-avatar-sand-bg: #f5eddf;
+  --color-avatar-sand-fg: #906d3e;
+
+  /* Prototype chrome */
+  --color-proto-bg: #121e2b;
+  --color-proto-fg: #e4ebf3;
+  --color-proto-muted: #cbd5e1;
+  --color-proto-input: #263544;
+  --color-proto-border: #4b5b6b;
+  --color-toast-bg: #121e2b;
+
+  /* ========== Border radius ========== */
+  --radius-xs: 0.125rem; /* 2px — chart bars */
+  --radius-sm: 0.3125rem; /* 5px — pills, counts, selects */
+  --radius-md: 0.375rem; /* 6px — calendar, rates */
+  --radius-lg: 0.4375rem; /* 7px — tags, seg, fields */
+  --radius-xl: 0.5rem; /* 8px — buttons, inputs, cards-sm */
+  --radius-2xl: 0.5625rem; /* 9px — week controls, boards */
+  --radius-3xl: 0.625rem; /* 10px — side notes, activity cards */
+  --radius-4xl: 0.75rem; /* 12px — cards, metrics (prototype --radius) */
+  --radius-5xl: 0.875rem; /* 14px — dialogs */
+  --radius-pill: 9999px;
+  --radius: 0.75rem; /* default = 12px */
+
+  /* ========== Shadows ========== */
+  --shadow-xs: 0 1px 2px #11182703; /* cards / metrics */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04); /* pills */
+  --shadow-md: 0 1px 3px #00000012; /* seg active, subtabs */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-hover: 0 2px 6px #11182712; /* task tags */
+  --shadow-pop: 0 6px 24px #11182715; /* filter popover */
+  --shadow-toast: 0 6px 24px #11182730;
+  --shadow-menu: 0 8px 24px #11182724; /* row action menu */
+  --shadow-dropdown: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+  --shadow-panel: 0 10px 32px #11182720; /* avatar / notif */
+  --shadow-notif: 0 12px 32px #11182720;
+  --shadow-hero: 0 5px 18px #1f6fb51a; /* featured metric */
+  --shadow-login: 0 10px 40px #185a9410;
+  --shadow-dialog: 0 16px 60px #11182733;
+  --shadow-focus-ring: 0 0 0 2px rgb(31 111 181 / 0.15);
+  --shadow-focus-dot: 0 0 0 3px #e7f1f9;
+
+  /* ========== Spacing (prototype gaps / padding rhythm) ========== */
+  --spacing-0: 0;
+  --spacing-0\.5: 0.125rem; /* 2px */
+  --spacing-1: 0.25rem; /* 4px */
+  --spacing-1\.5: 0.3125rem; /* 5px */
+  --spacing-2: 0.5rem; /* 8px — dominant gap */
+  --spacing-2\.5: 0.625rem; /* 10px */
+  --spacing-3: 0.75rem; /* 12px — dominant gap */
+  --spacing-3\.5: 0.875rem; /* 14px */
+  --spacing-4: 1rem; /* 16px */
+  --spacing-4\.5: 1.125rem; /* 18px */
+  --spacing-5: 1.25rem; /* 20px */
+  --spacing-6: 1.5rem; /* 24px */
+  --spacing-7: 1.75rem; /* 28px */
+  --spacing-8: 2rem; /* 32px — content padding */
+  --spacing-10: 2.5rem; /* 40px */
+  --spacing-12: 3rem; /* 48px */
+
+  /* ========== Breakpoints (prototype media queries) ========== */
+  --breakpoint-sm: 40rem; /* 640px ≈ 639 */
+  --breakpoint-md: 47.5rem; /* 760px */
+  --breakpoint-lg: 64rem; /* 1024px ≈ 1023 */
+  --breakpoint-xl: 68.75rem; /* 1100px */
+  --breakpoint-2xl: 75rem; /* 1200px */
+  --breakpoint-3xl: 100rem; /* 1600px */
+
+  /* ========== Motion ========== */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --animate-unlock-slide: unlock-slide 200ms var(--ease-out) forwards;
+  --animate-unlock-fade: unlock-fade 180ms ease forwards;
+  --animate-shimmer: shimmer-sweep 2.2s infinite linear;
+}
+
+/* ========== Non-utility / layout CSS variables ========== */
+:root {
+  /* Typography aliases */
+  --font-size-micro: var(--text-micro);
+  --font-size-caption: var(--text-caption);
+  --font-size-xs: var(--text-xs);
+  --font-size-sm: var(--text-sm);
+  --font-size-md: var(--text-md);
+  --font-size-base: var(--text-base);
+  --font-size-lg: var(--text-lg);
+  --font-size-xl: var(--text-xl);
+  --font-size-2xl: var(--text-2xl);
+  --font-size-3xl: var(--text-3xl);
+  --font-size-4xl: var(--text-4xl);
+  --font-size-5xl: var(--text-5xl);
+  --font-size-display: var(--text-display);
+  --font-size-max: 1.75rem;
+
+  /* Prototype :root parity */
+  --blue: var(--color-blue);
+  --blue-dark: var(--color-blue-dark);
+  --light: var(--color-light);
+  --ink: var(--color-ink);
+  --muted: var(--color-muted);
+  --line: var(--color-line);
+  --bg: var(--color-bg);
+  --green: var(--color-green);
+  --teal: var(--color-teal);
+  --amber: var(--color-amber);
+  --red: var(--color-red);
+
+  /* Layout shell */
+  --proto-bar-height: 2.5rem; /* 40px */
+  --sidebar-width: 15.5rem; /* 248px */
+  --sidebar-width-md: 13.4375rem; /* 215px */
+  --sidebar-width-collapsed: 4.625rem; /* 74px */
+  --topbar-height: 4.5rem; /* 72px */
+  --topbar-height-sm: 3.75rem; /* 60px */
+  --content-max: 90.625rem; /* 1450px (v1.2) */
+  --content-padding: 2rem; /* 32px */
+  --content-padding-sm: 1.375rem; /* 22px */
+  --main-rail-width: 17.375rem; /* 278px */
+  --dialog-width: 33.75rem; /* 540px */
+  --dialog-width-sm: 25rem; /* 400px */
+  --dialog-width-wide: 57.5rem; /* 920px */
+  --drawer-width: 31.25rem; /* 500px */
+  --mobile-nav-height: 4.375rem; /* 70px */
+
+  /* Controls */
+  --control-height: 2.5rem; /* 40px */
+  --control-height-sm: 2rem; /* 32px */
+  --control-height-md: 2.125rem; /* 34px */
+  --control-height-lg: 2.25rem; /* 36px */
+  --control-height-touch: 2.75rem; /* 44px */
+  --control-height-touch-lg: 2.875rem; /* 46px */
+  --icon-size: 1.25rem; /* 20px */
+  --icon-stroke: 1.6;
+  --avatar-size: 2.25rem; /* 36px */
+  --avatar-size-sm: 1.875rem; /* 30px */
+
+  /* Z-index layers */
+  --z-proto: 50;
+  --z-sidebar: 35;
+  --z-mobile-nav: 40;
+  --z-notif: 60;
+  --z-avatar-menu: 65;
+  --z-dialog: 100;
+  --z-row-menu: 120;
+  --z-unlock: 150;
+  --z-toast: 200;
+  --z-offline: 300;
+
+  /* Focus */
+  --focus-ring: 2px solid var(--color-blue-focus);
+  --focus-offset: 3px;
+
+  /* Dropdown chevrons — 5px padding to the right (prototype convention) */
+  --dropdown-chevron-pad: 0.3125rem; /* 5px */
+}
+
+@keyframes unlock-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes unlock-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-regular);
+    line-height: 1.55;
+    background: var(--color-bg);
+    font-variant-numeric: tabular-nums;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button {
+    cursor: pointer;
+    transition:
+      background var(--duration-fast),
+      color var(--duration-fast);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  a {
+    color: var(--color-blue);
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+  }
+
+  svg {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    vertical-align: middle;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: var(--icon-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  h1 {
+    font-size: var(--text-display);
+    font-weight: var(--font-weight-regular);
+    line-height: 1.3;
+    letter-spacing: -0.05em;
+  }
+
+  h2 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-regular);
+    line-height: 1.5;
+    letter-spacing: -0.0167em;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  small {
+    font-size: var(--text-sm);
+  }
+
+  /* Form controls — prototype defaults */
+  input,
+  select,
+  textarea {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0.5625rem 0.75rem;
+    color: var(--color-gray-700);
+    background: var(--color-surface);
+    min-height: var(--control-height);
+  }
+
+  input[type="checkbox"] {
+    min-height: auto;
+    accent-color: var(--color-blue);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 6rem;
+    width: 100%;
+  }
+
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    /* chevron sits with 5px inset from the right edge */
+    background-position: calc(100% - var(--dropdown-chevron-pad) - 8px) center;
+    background-size: 14px 14px;
+    padding-right: 2.125rem; /* room for chevron + 5px pad */
+    cursor: pointer;
+  }
+
+  /*
+    Dropdown selector buttons with chevron —
+    5px padding-right on the chevron icon (prototype convention).
+  */
+  .btn > svg[data-icon="chevron"]:last-child,
+  .btn > svg[data-icon="down"]:last-child,
+  .shimmer-counter-btn > svg[data-icon="chevron"]:last-child,
+  .shimmer-counter-btn > svg[data-icon="down"]:last-child,
+  .profile-btn > svg[data-icon="chevron"]:last-child,
+  .profile-btn > svg[data-icon="down"]:last-child,
+  .backlog-row svg[data-icon="chevron"]:last-child,
+  .quick-link svg[data-icon="chevron"]:last-child,
+  .dropdown-chevron {
+    padding-right: var(--dropdown-chevron-pad);
+    box-sizing: content-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
