@@ -134,6 +134,30 @@ Before calling a feature done or handing off:
 3. Update scope checkboxes / status (via the skill or carefully by hand).
 4. Prefer a fresh chat (`/clear` or new agent session) for the next feature so the next run re-reads files from disk.
 
+### 6. Push and pull requests
+
+**Do not push directly to `main` or `staging`.** Those branches are updated only by merging pull requests.
+
+When you (or the agent) are ready to push committed work — code, docs, or other files:
+
+1. **Create a new branch from `staging`** (update local `staging` first if needed).
+2. **Push that branch** to the remote.
+3. **Open a PR with `staging` as the base** (not `main`).
+
+Example:
+
+```bash
+git fetch origin
+git checkout staging
+git pull origin staging
+git checkout -b your-feature-branch
+# ... commit your work if not already committed ...
+git push -u origin your-feature-branch
+gh pr create --base staging --title "…" --body "…"
+```
+
+Agents must follow the same rules in [`AGENTS.md`](AGENTS.md) (refuse direct pushes to `main` / `staging` and open PRs against `staging`).
+
 ## Role map (from the prototype)
 
 | Role | Main areas (prototype nav) |

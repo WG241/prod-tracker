@@ -97,6 +97,18 @@ Commit the installed skills folder when the team should share the same workflow.
 - `integration: off` by default (agent does not auto branch or auto commit unless the user asks).
 - Always inspect `git status` and recent commits when resuming work.
 
+### Push and pull requests (required)
+
+**Never push commits or documentation directly to `main` or `staging`.** Protected integration branches are merge-only via PR.
+
+When the user asks to push committed changes (code, docs, or anything else):
+
+1. **Create a new branch from `staging`** (fetch/update `staging` first if needed). Do not branch from `main` unless the user explicitly says otherwise.
+2. **Push that feature branch** to the remote (`git push -u origin <branch>`).
+3. **Open a pull request with `staging` as the base** (not `main`).
+
+If the user is already on `main` or `staging` with local commits, move those commits onto a new branch off `staging` before pushing; do not push the protected branch. If they ask to push to `main` or `staging` directly, refuse and follow this flow instead.
+
 ## Context files
 
 <!-- Nested AGENTS.md files are listed here as they are created -->
