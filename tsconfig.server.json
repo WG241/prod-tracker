@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "outDir": "dist-server"
+  },
+  "include": ["server/**/*.ts", "prisma/**/*.ts", "src/generated/prisma/**/*.ts"]
+}

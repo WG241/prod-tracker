@@ -4,11 +4,11 @@ Internal weekly performance tracker for Workforce Group. Five roles: Employee, L
 
 ## Stack
 
-- **Language / Runtime**: TypeScript, Node (Vite 8)
-- **Framework**: React 19 + Vite
-- **Key dependencies**: Prisma 7, Neon serverless adapter, Tailwind CSS v4, Lucide
+- **Language / Runtime**: strict TypeScript, Node 24, npm 11 (Vite 8)
+- **Framework**: React 19 + Vite, Express 5 in one Node service
+- **Key dependencies**: Prisma 7, PrismaPg, pg, Tailwind CSS v4, Lucide
 - **Package manager**: npm
-- **Database**: PostgreSQL via Prisma (local migrate + seed for development; Neon ready via `.env`)
+- **Database**: native local PostgreSQL 18.6 via PrismaPg; Neon uses the same PostgreSQL TCP adapter (spec `docs/specs/0001-stack-and-architecture/index.md`).
 
 ## Build approach
 
@@ -34,13 +34,36 @@ npm run build
 npm run lint
 
 # Database
+npm run db:setup
+npm run db:start
 npm run db:generate
 npm run db:migrate
+npm run db:seed
 npm run db:studio
 
-# Test (add when /test introduces a runner; until then use /check verify on the running app)
-# npm test
+# Local data model checks, including rollback constraint probes
+npm run db:verify
+npm run db:stop
+
+# Production (after build)
+npm run start
+
+# Test (explicit separate local TEST_DATABASE_URL is required)
+npm run test:setup
+npm test
 ```
+
+## Coding conventions and tooling
+
+Feature 1 records the existing scaffold conventions here. Use Node 24 and npm 11 (see `.node-version` and `package.json`).
+
+- Use TypeScript with `strict` enabled and ESM imports. Prefer explicit domain types and `unknown` for untrusted values over `any`. Use `import type` for imports used only as types.
+- Match the scaffold style: two spaces, single quotes in TypeScript, no semicolons, trailing commas in multiline lists, and double quotes for JSX attributes. `.editorconfig` records UTF-8, LF, indentation, and final newlines. No standalone formatter is installed yet.
+- Use function components and hooks. Name components and their files in PascalCase, hooks as `useName`, and other functions and variables in camelCase. Keep related feature code together and extract shared code only when it has real consumers.
+- `src/main.tsx` is the browser entry. Keep Node globals, database clients, and credentials out of browser imports. `server/db.ts` owns PrismaPg. `tsconfig.server.json` compiles server code, `tsconfig.node.json` checks tooling, and `tsconfig.app.json` checks browser code with Vite types.
+- Change `prisma/schema.prisma` and regenerate the client instead of editing `src/generated/`. Generated clients, dependencies, build output, and local environment files stay out of Git. Only public configuration may use a `VITE_` prefix.
+- Run `npm run lint` for Oxlint with warnings treated as failures. `npm run lint:fix` applies normal lint fixes. `npm run typecheck` checks all TypeScript projects and emits server JavaScript. `npm run check` runs lint and the production build, which includes type checking.
+- A clean build is a tooling check. Feature acceptance still requires `/check verify` on the running app and any tests required by the scope. `npm test` type checks tests and operator scripts, then runs Node/tsx authentication tests against an explicit separate local test database.
 
 ## Specs
 
@@ -82,6 +105,20 @@ Install from [`jsmastery-pro/skills`](https://github.com/jsmastery-pro/skills) (
 
 Expected workflow skills: `scope`, `audit`, `architect`, `develop`, `check`, `test`, `document`, `sync`, `debug`.
 
+Installed on 2026-10-26 from `jsmastery-pro/skills` (`main`). The shared copies live in `.agents/skills/`; their MIT license is in `docs/third-party/jsmastery-skills-LICENSE.txt`. Codex discovers these skills on the next turn. You can also read each file directly during the current turn.
+
+- [scope](.agents/skills/scope/SKILL.md): `jsmastery-pro/skills`, maintain the feature plan.
+- [audit](.agents/skills/audit/SKILL.md): `jsmastery-pro/skills`, capture project conventions.
+- [architect](.agents/skills/architect/SKILL.md): `jsmastery-pro/skills`, record decisions in specs.
+- [develop](.agents/skills/develop/SKILL.md): `jsmastery-pro/skills`, implement one feature.
+- [check](.agents/skills/check/SKILL.md): `jsmastery-pro/skills`, verify the app or review changes.
+- [test](.agents/skills/test/SKILL.md): `jsmastery-pro/skills`, add regression coverage.
+- [document](.agents/skills/document/SKILL.md): `jsmastery-pro/skills`, document completed work.
+- [sync](.agents/skills/sync/SKILL.md): `jsmastery-pro/skills`, reconcile context with the code.
+- [debug](.agents/skills/debug/SKILL.md): `jsmastery-pro/skills`, diagnose and fix failures.
+
+Additional technology specific skills and MCP discovery for Express, PrismaPg, and PostgreSQL were deferred during Feature 2.
+
 ```bash
 # Cursor / generic Agent Skills clients
 npx skills@latest add jsmastery-pro/skills
@@ -112,5 +149,9 @@ If the user is already on `main` or `staging` with local commits, move those com
 ## Context files
 
 <!-- Nested AGENTS.md files are listed here as they are created -->
+
+- [server/AGENTS.md](server/AGENTS.md): Express serving, server only database access, and readiness behavior.
+- [server/data-proof/AGENTS.md](server/data-proof/AGENTS.md): fixed local development proof, request guards, and reply retry semantics.
+- [server/auth/AGENTS.md](server/auth/AGENTS.md): linked credentials, sessions, current role context, policies, limits, audit and trusted provisioning.
 
 _Human curated handoff for junior developers and AI coding agents. `/audit` and `/sync` should flag rather than overwrite intentional prose in Rules and Design source of truth._

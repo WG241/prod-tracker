@@ -11,29 +11,84 @@ This repo is set up so a **junior developer + AI coding IDE** can build feature 
 
 ## Quick start
 
-```bash
-# 1. Install dependencies
+On a fresh Windows x64 clone, use PowerShell:
+
+```powershell
+# 1. Create configuration if it does not already exist
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+
+# 2. Install dependencies
 npm install
 
-# 2. Configure database (copy and fill)
-cp .env.example .env
-# Set DATABASE_URL and DATABASE_URL_UNPOOLED (Neon or local Postgres)
+# 3. Install and initialize native local PostgreSQL
+npm run db:setup
 
-# 3. Generate Prisma client and migrate when schema is ready
-npm run db:generate
+# 4. Apply migrations, generate the client, and seed
 npm run db:migrate
+npm run db:generate
+npm run db:seed
 
-# 4. Run the app
+# 5. Privately configure BETTER_AUTH_SECRET and BETTER_AUTH_URL in .env.
+# For fictional account credentials, explicitly set LOCAL_AUTH_TEST_PASSWORD,
+# then run the separate command. See docs/auth-operations.md.
+npm run auth:seed
+
+# 6. Run Express and Vite together at http://127.0.0.1:5173
 npm run dev
 ```
 
-Other useful commands: `npm run build`, `npm run lint`, `npm run db:studio`.
+For later sessions, run `npm run db:start` and then `npm run dev`. `npm run db:stop` stops PostgreSQL and preserves its data. `npm run db:status` reports whether the local database is running. The helper uses PostgreSQL 18.6 on `127.0.0.1:5433`, verifies the official EDB archive checksum, and keeps its binaries, data, credentials, and logs in ignored `.local/`. It creates separate `prod_tracker` and `prod_tracker_shadow` databases, with a dedicated role that has no superuser or database creation privilege.
+
+`db:setup` writes local credentials to `.env`. It preserves an existing Neon configuration in ignored `.env.neon.local` without overwriting an existing backup. On other platforms, install native PostgreSQL, create a development database and a separate shadow database, then fill `.env` using `.env.example`. Keep all database credentials outside browser code.
+
+Use Node 24 and npm 11. `.node-version` records the Node major version.
+
+Other useful commands:
+
+| Command | What it checks |
+|---------|----------------|
+| `npm run lint` | Oxlint on browser, server, seed, scripts, and configuration files; warnings fail the command |
+| `npm run lint:fix` | Apply normal lint fixes |
+| `npm run typecheck` | Strict checks for browser and tooling, plus compilation of server JavaScript |
+| `npm run build` | Type checking and the Vite production build |
+| `npm run check` | Lint and the production build together |
+| `npm run db:studio` | Open Prisma Studio |
+| `npm run db:verify` | Check fixture repeatability, five role projections, and rejected invalid writes against local PostgreSQL |
+| `npm run start` | Serve the compiled browser app and API in one production Node service |
+| `npm run preview` | Run the same production service after a build |
+| `npm run auth:provision -- --user-id person-id` | Provision an existing eligible person through a hidden terminal prompt |
+| `npm run auth:seed` | Explicitly provision the five fictional local accounts |
+| `npm run auth:prune` | Remove expired sessions and throttle windows |
+| `npm run test:setup` | Migrate and seed the separate local authentication test database |
+| `npm test` | Type check the tests and run the Node and HTTP authentication suite |
+
+Coding conventions are in `AGENTS.md`. `.editorconfig` supplies editor whitespace defaults. There is no standalone formatter. The Node test runner uses tsx and requires a separate explicit local `TEST_DATABASE_URL`. `npm run check` checks tooling; `/check verify` still exercises feature behavior in the running app.
+
+Sign in configuration, trusted provisioning, recovery from interrupted provisioning, local test setup and proxy limits are documented in [auth operations](docs/auth-operations.md). Real workspaces use the person's current database role. Development previews remain at `/__ui`, `/__ui?view=workspace` and `/__data-proof` and cannot establish a session.
+
+## Architecture and connection check
+
+The accepted architecture is recorded in [spec 0001](docs/specs/0001-stack-and-architecture/index.md). `server/` holds Express and the PrismaPg database client; `src/` holds browser code. The data model is recorded in [spec 0002](docs/specs/0002-data-model/index.md). `npm run db:seed` preserves existing rows and inserts missing sample identities and evidence in one transaction. It provides 28 staff identities, 35 weekly tasks and 110 weekly roster records, plus the inactive foundation identity. Dates are fixed to October 2026. See the [fixture manifest](prisma/fixtures/README.md) for source corrections and synthetic scenarios. Sample email deliveries remain suppressed. `npm run db:verify` checks the real local database and rolls back its constraint probes.
+
+The browser makes a health request on startup and logs its connection result. `GET /api/health` returns `200` with `{ "status": "ok", "database": "connected" }` after querying the migrated table, or `503` with unavailable values if the database cannot be queried. It exposes no employee information or configuration. Unknown `/api/*` routes return JSON 404 responses.
+
+For a production check, run `npm run build` then `npm run start`. It defaults to port 3000 and host `0.0.0.0`; use `HOST=127.0.0.1` for local verification and `PORT` to select another port. For example, in PowerShell:
+
+```powershell
+$env:HOST = '127.0.0.1'
+$env:BETTER_AUTH_URL = 'http://127.0.0.1:3000'
+npm run start
+```
+
+Neon deployments use the same PrismaPg connection path: set `DATABASE_URL` to the runtime connection and `DATABASE_URL_UNPOOLED` to the direct migration connection, with the documented TLS settings in `.env.example`. Build with development dependencies available, apply committed migrations using `npm run db:deploy`, and start the compiled service. The local database helper is for development. Hosting vendor setup and hosted Neon verification remain future deployment work.
 
 ## Install workflow skills (required for agents)
 
 Product work uses the JS Mastery engineering workflow skills (`/scope`, `/architect`, `/develop`, `/check`, `/test`, and related).
 
 Repo: [https://github.com/jsmastery-pro/skills](https://github.com/jsmastery-pro/skills)
+
+All nine workflow skills are installed in `.agents/skills/` and can be shared through Git. Each includes its supporting guides and agent metadata. The copy was installed from `main` on 2026-10-26. Its MIT license is preserved in `docs/third-party/jsmastery-skills-LICENSE.txt`. Local agent state remains ignored. Codex discovers the installed skills on the next turn; agents can read their `SKILL.md` files directly now.
 
 If your IDE does not already have these skills:
 
@@ -190,10 +245,10 @@ Resume from the last commit and unstaged files. Continue the first unticked box 
 
 ## Repo status (honest)
 
-- Scaffold: React + Vite + Tailwind + Prisma + Neon wiring.
+- Foundation: React, Vite, Express, PrismaPg, and native local PostgreSQL, with Neon deployment configuration supported.
 - Product UI: not built yet; the clickable map is the HTML prototype under `docs/`.
 - Scope: written under `docs/scope/`.
-- Specs: create with `/architect` as you take each `needs a decision` feature.
+- Specs: architecture in spec 0001; create later feature specs with `/architect` as you take each `needs a decision` feature.
 
 ## License / internal use
 

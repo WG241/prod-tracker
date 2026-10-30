@@ -1,6 +1,5 @@
-// Prisma schema for Neon PostgreSQL
-// https://pris.ly/d/prisma-schema
-// https://neon.tech/docs/guides/prisma
+// Workforce Group model, governed by docs/specs/0002-data-model/index.md.
+// CHECK constraints, partial indexes and history guards live in migration SQL.
 
 generator client {
   provider = "prisma-client"
@@ -12,9 +11,493 @@ datasource db {
 }
 
 model User {
+  id                    String        @id @default(cuid())
+  email                 String        @unique
+  name                  String?
+  accountStatus         AccountStatus @default(INACTIVE)
+  emailRemindersEnabled Boolean       @default(true)
+  deactivatedAt         DateTime?     @db.Timestamptz(3)
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
+
+  assignments        EmploymentAssignment[] @relation("AssignmentOwner")
+  managedAssignments EmploymentAssignment[] @relation("ReportingManager")
+  trackers           WeeklyTracker[]
+  taskSeries         TaskSeries[]
+  weeklyTasks        WeeklyTask[]
+  comments           TaskComment[]
+  submissions        ApprovalRequest[]      @relation("RequestSubmitter")
+  reviewQueue        ApprovalRequest[]      @relation("RequestReviewer")
+  decisions          ApprovalDecision[]     @relation("DecisionActor")
+  coveredDecisions   ApprovalDecision[]     @relation("DecisionPrincipal")
+  leaves             LeaveRecord[]          @relation("LeaveOwner")
+  cancelledLeaves    LeaveRecord[]          @relation("LeaveCanceller")
+  coveredLeaves      ReliefAssignment[]     @relation("CoveredManager")
+  reliefCover        ReliefAssignment[]     @relation("ReliefManager")
+  endedCover         ReliefAssignment[]     @relation("ReliefEnder")
+  lockedWeeks        WorkWeek[]
+  settingsEdits      TrackerSettings[]
+  targetedUnlocks    PlanningUnlock[]       @relation("UnlockTarget")
+  grantedUnlocks     PlanningUnlock[]       @relation("UnlockGranter")
+  revokedUnlocks     PlanningUnlock[]       @relation("UnlockRevoker")
+  auditEvents        AuditEvent[]
+  notifications      Notification[]
+  authIdentity       AuthUser?
+}
+
+model AuthUser {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  provisionedAt DateTime?  @db.Timestamptz(3)
+  createdAt     DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime   @updatedAt @db.Timestamptz(3)
+  person        User      @relation(fields: [id], references: [id], onDelete: Restrict)
+  accounts      AuthAccount[]
+  sessions      AuthSession[]
+}
+
+model AuthAccount {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  password              String?
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  idToken               String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  user                  AuthUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model AuthSession {
+  id        String   @id
+  userId    String
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      AuthUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  @@index([identifier])
+}
+
+model LoginThrottle {
+  key             String   @id
+  count           Int
+  windowStartedAt DateTime @db.Timestamptz(3)
+  expiresAt       DateTime @db.Timestamptz(3)
+  updatedAt       DateTime @db.Timestamptz(3)
+  @@index([expiresAt])
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Role {
+  EMPLOYEE
+  LINE_MANAGER
+  BUSINESS_DIRECTOR
+  EXECUTIVE
+  HR_ADMIN
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  BLOCKED
+  AWAITING_APPROVAL
+  APPROVED
+  DECLINED
+  ON_HOLD
+  CANCELLED
+}
+
+enum ApprovalState {
+  PENDING
+  DECIDED
+  WITHDRAWN
+}
+
+enum DecisionKind {
+  APPROVE
+  DECLINE
+}
+
+enum DecisionMethod {
+  HUMAN
+  AUTOMATIC
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum UnlockScope {
+  PERSON
+  UNIT
+  BUSINESS
+  EVERYONE
+}
+
+enum EmailState {
+  QUEUED
+  SENT
+  FAILED
+  SUPPRESSED
+}
+
+model Business {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  archivedAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  units       Unit[]
+  assignments EmploymentAssignment[]
+  unlocks     PlanningUnlock[]
+}
+
+model Unit {
+  id          String    @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  archivedAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  business    Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  assignments EmploymentAssignment[]
+  unlocks     PlanningUnlock[]
+
+  @@unique([businessId, name])
+  @@unique([id, businessId])
+}
+
+model EmploymentAssignment {
+  id              String    @id @default(cuid())
+  userId          String
+  role            Role
+  businessId      String?
+  unitId          String?
+  managerId       String?
+  departmentLabel String?
+  effectiveFrom   DateTime  @db.Timestamptz(3)
+  effectiveTo     DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+
+  user        User              @relation("AssignmentOwner", fields: [userId], references: [id], onDelete: Restrict)
+  manager     User?             @relation("ReportingManager", fields: [managerId], references: [id], onDelete: Restrict)
+  business    Business?         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  unit        Unit?             @relation(fields: [unitId, businessId], references: [id, businessId], onDelete: Restrict)
+  trackers    WeeklyTracker[]
+  submissions ApprovalRequest[]
+
+  @@unique([id, userId])
+  @@index([userId, effectiveFrom])
+  @@index([businessId, role])
+  @@index([managerId, effectiveTo])
+}
+
+model WorkWeek {
+  id               String    @id @default(cuid())
+  startsOn         DateTime  @unique @db.Date
+  planningLocksAt  DateTime  @db.Timestamptz(3)
+  freezesAt        DateTime  @db.Timestamptz(3)
+  manuallyLockedAt DateTime? @db.Timestamptz(3)
+  lockedById       String?
+  lockReason       String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+
+  lockedBy User?            @relation(fields: [lockedById], references: [id], onDelete: Restrict)
+  trackers WeeklyTracker[]
+  unlocks  PlanningUnlock[]
+}
+
+model WeeklyTracker {
+  id                          String    @id @default(cuid())
+  userId                      String
+  weekId                      String
+  assignmentId                String
+  contextSnapshot             Json
+  expectedWorkingDaysSnapshot Int?
+  snapshotAt                  DateTime? @db.Timestamptz(3)
+  createdAt                   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime  @updatedAt @db.Timestamptz(3)
+
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  week       WorkWeek             @relation(fields: [weekId], references: [id], onDelete: Restrict)
+  assignment EmploymentAssignment @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Restrict)
+  tasks      WeeklyTask[]
+
+  @@unique([userId, weekId])
+  @@unique([id, userId])
+  @@index([weekId, assignmentId])
+}
+
+model TaskSeries {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  ownerId   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  owner User         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  tasks WeeklyTask[]
+
+  @@unique([id, ownerId])
+}
+
+model WeeklyTask {
+  id             String     @id @default(cuid())
+  seriesId       String
+  trackerId      String
+  ownerId        String
+  carriedFromId  String?
+  title          String     @db.VarChar(120)
+  activity       String
+  startsOn       DateTime   @db.Date
+  endsOn         DateTime   @db.Date
+  status         TaskStatus @default(PENDING)
+  blockerReason  String?
+  carryRequested Boolean    @default(false)
+  deletedAt      DateTime?  @db.Timestamptz(3)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  owner         User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  series        TaskSeries        @relation(fields: [seriesId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  tracker       WeeklyTracker     @relation(fields: [trackerId, ownerId], references: [id, userId], onDelete: Restrict)
+  carriedFrom   WeeklyTask?       @relation("TaskCarry", fields: [carriedFromId, seriesId], references: [id, seriesId], onDelete: Restrict)
+  continuations WeeklyTask[]      @relation("TaskCarry")
+  comments      TaskComment[]
+  approvals     ApprovalRequest[]
+  notifications Notification[]
+
+  @@unique([seriesId, trackerId])
+  @@unique([id, ownerId])
+  @@unique([id, seriesId])
+  @@index([trackerId, status])
+  @@index([ownerId, deletedAt])
+}
+
+model TaskComment {
+  id           String   @id @default(cuid())
+  weeklyTaskId String
+  authorId     String
+  body         String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  task   WeeklyTask @relation(fields: [weeklyTaskId], references: [id], onDelete: Restrict)
+  author User       @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([weeklyTaskId, createdAt])
+}
+
+model ApprovalRequest {
+  id                     String        @id @default(cuid())
+  weeklyTaskId           String
+  attemptNumber          Int
+  submittedById          String
+  submissionAssignmentId String
+  submissionSnapshot     Json
+  assignedManagerId      String?
+  submittedAt            DateTime      @default(now()) @db.Timestamptz(3)
+  state                  ApprovalState @default(PENDING)
+
+  task       WeeklyTask           @relation(fields: [weeklyTaskId, submittedById], references: [id, ownerId], onDelete: Restrict)
+  submitter  User                 @relation("RequestSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  assignment EmploymentAssignment @relation(fields: [submissionAssignmentId, submittedById], references: [id, userId], onDelete: Restrict)
+  reviewer   User?                @relation("RequestReviewer", fields: [assignedManagerId], references: [id], onDelete: Restrict)
+  decision   ApprovalDecision?
+
+  @@unique([weeklyTaskId, attemptNumber])
+  @@index([assignedManagerId, state, submittedAt])
+}
+
+model ApprovalDecision {
+  id                 String         @id @default(cuid())
+  requestId          String         @unique
+  decision           DecisionKind
+  method             DecisionMethod
+  actorId            String?
+  actingForManagerId String?
+  reliefAssignmentId String?
+  reason             String?
+  decidedAt          DateTime       @default(now()) @db.Timestamptz(3)
+
+  request   ApprovalRequest   @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  actor     User?             @relation("DecisionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  principal User?             @relation("DecisionPrincipal", fields: [actingForManagerId], references: [id], onDelete: Restrict)
+  relief    ReliefAssignment? @relation(fields: [reliefAssignmentId], references: [id], onDelete: Restrict)
+
+  @@index([decidedAt])
+}
+
+model LeaveRecord {
+  id               String    @id @default(cuid())
+  userId           String
+  startsOn         DateTime  @db.Date
+  expectedReturnOn DateTime  @db.Date
+  actualReturnOn   DateTime? @db.Date
+  cancelledAt      DateTime? @db.Timestamptz(3)
+  cancelledById    String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+
+  user          User               @relation("LeaveOwner", fields: [userId], references: [id], onDelete: Restrict)
+  cancelledBy   User?              @relation("LeaveCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  relief        ReliefAssignment[]
+  notifications Notification[]
+
+  @@unique([id, userId])
+  @@index([userId, startsOn, expectedReturnOn])
+}
+
+model ReliefAssignment {
+  id               String    @id @default(cuid())
+  leaveId          String
+  coveredManagerId String
+  reliefManagerId  String
+  startsOn         DateTime  @db.Date
+  endsOn           DateTime  @db.Date
+  endedAt          DateTime? @db.Timestamptz(3)
+  endedById        String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+
+  leave         LeaveRecord        @relation(fields: [leaveId, coveredManagerId], references: [id, userId], onDelete: Restrict)
+  manager       User               @relation("CoveredManager", fields: [coveredManagerId], references: [id], onDelete: Restrict)
+  officer       User               @relation("ReliefManager", fields: [reliefManagerId], references: [id], onDelete: Restrict)
+  endedBy       User?              @relation("ReliefEnder", fields: [endedById], references: [id], onDelete: Restrict)
+  decisions     ApprovalDecision[]
+  notifications Notification[]
+
+  @@index([coveredManagerId, startsOn, endsOn])
+  @@index([reliefManagerId, startsOn, endsOn])
+}
+
+model TrackerSettings {
+  id                  String   @id @default("workforce-group")
+  timezone            String   @default("Africa/Lagos")
+  openingDay          Weekday  @default(MONDAY)
+  openingTime         String   @default("08:00")
+  followupDay         Weekday  @default(TUESDAY)
+  followupTime        String   @default("12:00")
+  updateDay           Weekday  @default(FRIDAY)
+  updateTime          String   @default("15:00")
+  lockDay             Weekday  @default(TUESDAY)
+  lockTime            String   @default("14:00")
+  overdueApprovalDays Int      @default(3)
+  monthEndDay         Int      @default(1)
+  updatedById         String?
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+}
+
+model PlanningUnlock {
+  id          String      @id @default(cuid())
+  weekId      String
+  scope       UnlockScope
+  userId      String?
+  unitId      String?
+  businessId  String?
+  grantedById String
+  reason      String
+  grantedAt   DateTime    @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime    @db.Timestamptz(3)
+  revokedAt   DateTime?   @db.Timestamptz(3)
+  revokedById String?
+
+  week      WorkWeek  @relation(fields: [weekId], references: [id], onDelete: Restrict)
+  user      User?     @relation("UnlockTarget", fields: [userId], references: [id], onDelete: Restrict)
+  unit      Unit?     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  business  Business? @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  grantedBy User      @relation("UnlockGranter", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy User?     @relation("UnlockRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+
+  @@index([weekId, expiresAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([targetType, targetId, createdAt])
+  @@index([createdAt])
+}
+
+model Notification {
+  id                 String    @id @default(cuid())
+  recipientId        String
+  kind               String
+  title              String
+  body               String
+  weeklyTaskId       String?
+  leaveId            String?
+  reliefAssignmentId String?
+  deduplicationKey   String
+  readAt             DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  recipient User              @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  task      WeeklyTask?       @relation(fields: [weeklyTaskId], references: [id], onDelete: Restrict)
+  leave     LeaveRecord?      @relation(fields: [leaveId], references: [id], onDelete: Restrict)
+  relief    ReliefAssignment? @relation(fields: [reliefAssignmentId], references: [id], onDelete: Restrict)
+  email     EmailDelivery?
+
+  @@unique([recipientId, deduplicationKey])
+  @@index([recipientId, readAt, createdAt])
+}
+
+model EmailDelivery {
+  id             String     @id @default(cuid())
+  notificationId String     @unique
+  recipientEmail String
+  state          EmailState @default(QUEUED)
+  attemptCount   Int        @default(0)
+  scheduledAt    DateTime   @default(now()) @db.Timestamptz(3)
+  lastAttemptAt  DateTime?  @db.Timestamptz(3)
+  sentAt         DateTime?  @db.Timestamptz(3)
+  failureCode    String?
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+
+  @@index([state, scheduledAt])
 }

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": { "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tests.tsbuildinfo" },
+  "include": ["tests/**/*.ts", "scripts/auth-*.ts"]
+}

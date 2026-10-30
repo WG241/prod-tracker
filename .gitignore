@@ -6,6 +6,8 @@ node_modules
 # Build
 dist
 dist-ssr
+dist-server
+.local/
 build
 *.local
 *.tsbuildinfo
@@ -56,7 +58,21 @@ Desktop.ini
 .claude/
 .codex/
 .agent/
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/architect/
+!.agents/skills/audit/
+!.agents/skills/check/
+!.agents/skills/debug/
+!.agents/skills/best-practices/
+!.agents/skills/security/
+!.agents/skills/emailAndPassword/
+!.agents/skills/develop/
+!.agents/skills/document/
+!.agents/skills/scope/
+!.agents/skills/sync/
+!.agents/skills/test/
 .aider*
 .continue/
 .windsurf/
