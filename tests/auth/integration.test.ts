@@ -209,7 +209,7 @@ test('email failures, atomic concurrent counters and independent IP limits persi
   const concurrentKey = throttleKey(config.secret, 'email', randomUUID())
   counterKeys.add(concurrentKey)
   await Promise.all(Array.from({ length: 8 }, () => recordFailure(db, concurrentKey)))
-  assert.equal((await db.loginThrottle.findUniqueOrThrow({ where: { key: concurrentKey } })).count, 8)
+  assert.equal((await db.loginThrottle.findUniqueOrThrow({ where: { key: concurrentKey } })).count, 5)
   await assert.rejects(checkEmail(db, concurrentKey), /Too many attempts/)
   const ipKey = throttleKey(config.secret, 'ip', '127.0.0.1')
   await db.loginThrottle.update({ where: { key: ipKey }, data: { count: 100 } })

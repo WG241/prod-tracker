@@ -1,5 +1,6 @@
 import type { PrismaClient, Prisma } from '../../src/generated/prisma/client.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
+import { watCalendarDay } from '../data-model/calendar.ts'
 
 export function ownPerson(context: SessionContext, personId: string) {
   return context.user.id === personId
@@ -64,7 +65,7 @@ export async function canReadTask(db: PrismaClient, context: SessionContext, tas
 
 export async function canReviewRelief(db: PrismaClient, context: SessionContext, requestId: string, now = new Date()) {
   if (context.role !== 'LINE_MANAGER') return false
-  const date = new Date(`${new Date(now.getTime() + 3600000).toISOString().slice(0, 10)}T00:00:00Z`)
+  const date = watCalendarDay(now)
   return !!await db.approvalRequest.findFirst({ where: {
     id: requestId, state: 'PENDING',
     reviewer: { coveredLeaves: { some: {

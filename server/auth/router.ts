@@ -6,11 +6,12 @@ import type { AuthConfig } from './config.ts'
 import { AuthFailure, messages } from './errors.ts'
 import type { AuthService } from './service.ts'
 import { providerHeaders } from './service.ts'
-import { checkEmail, recordFailure, reserve, throttleKey } from './throttle.ts'
+import { checkEmail, clientIp, recordFailure, reserve, throttleKey } from './throttle.ts'
 
 export function forwardCookies(response: Response, headers: Headers) {
-  const cookies = headers.getSetCookie()
-  if (cookies.length) response.append('Set-Cookie', cookies)
+  // Append each cookie separately. Passing the getSetCookie() array to append can
+  // collapse multiple Set-Cookie values and drop renewal or expiry headers (AC-3).
+  for (const cookie of headers.getSetCookie()) response.append('Set-Cookie', cookie)
 }
 
 function originAllowed(request: Request, config: AuthConfig, mutation: boolean) {
@@ -51,7 +52,7 @@ export function registerAuth(api: Router, db: PrismaClient, service: AuthService
       if (Object.keys(fields).length !== 2 || typeof fields.email !== 'string' || !validPassword(fields.password)) throw new AuthFailure('INVALID_INPUT', 400)
       const email = fields.email.trim().toLowerCase()
       if (!email || email.length > 254 || !wellFormed(email) || email.includes('\0')) throw new AuthFailure('INVALID_INPUT', 400)
-      const ip = request.socket.remoteAddress ?? 'unknown'
+      const ip = clientIp(request)
       await reserve(db, throttleKey(config.secret, 'ip', ip), 100, 900)
       const key = throttleKey(config.secret, 'email', email)
       await checkEmail(db, key)
@@ -68,7 +69,7 @@ export function registerAuth(api: Router, db: PrismaClient, service: AuthService
   authRouter.all(['/session', '/auth/sign-out'], async (request, response) => {
     try {
       if (request.path !== '/session' && (!request.body || typeof request.body !== 'object' || Array.isArray(request.body) || Object.keys(request.body as object).length)) throw new AuthFailure('INVALID_INPUT', 400)
-      await reserve(db, throttleKey(config.secret, 'auth-ip', request.socket.remoteAddress ?? 'unknown'), 100, 10)
+      await reserve(db, throttleKey(config.secret, 'auth-ip', clientIp(request)), 100, 10)
       const headers = providerHeaders(request.headers)
       if (request.path === '/session') {
         const result = await service.current(headers)

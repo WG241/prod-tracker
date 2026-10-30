@@ -22,6 +22,8 @@ async function main() {
   const app = express()
   const server = createServer(app)
   app.disable('x-powered-by')
+  // Off by default. Only enable after a hosting-specific trusted proxy decision.
+  if (config.trustProxy !== false) app.set('trust proxy', config.trustProxy)
 
   const api = express.Router()
   registerHealth(api, prisma)

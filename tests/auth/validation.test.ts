@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { randomBytes } from 'node:crypto'
+import type { Response } from 'express'
 import { authTestDatabase, checkedDatabaseTarget, readAuthConfig } from '../../server/auth/config.ts'
+import { forwardCookies } from '../../server/auth/router.ts'
+import { day, watCalendarDay } from '../../server/data-model/calendar.ts'
 import { roleRoutes, routeContext, validPassword } from '../../src/features/auth/contracts.ts'
-import { throttleKey } from '../../server/auth/throttle.ts'
+import { readTrustProxy } from '../../server/config.ts'
+import { EMAIL_FAILURE_LIMIT, throttleKey } from '../../server/auth/throttle.ts'
 
 // AC-5, AC-8: boundary values, fixed routes and secure configuration.
 test('password policy counts Unicode characters and preserves spaces', () => {
@@ -41,4 +45,38 @@ test('throttle keys are opaque and separated by namespace and secret', () => {
   assert.equal(key.includes('person'), false)
   assert.notEqual(key, throttleKey('second-secret', 'email', 'person@example.com'))
   assert.notEqual(key, throttleKey('first-secret', 'ip', 'person@example.com'))
+})
+test('forwardCookies appends each Set-Cookie value individually (AC-3)', () => {
+  const appended: Array<[string, string]> = []
+  const response = {
+    append(name: string, value: string) {
+      appended.push([name, value])
+      return this
+    },
+  } as unknown as Response
+  const headers = new Headers()
+  headers.append('Set-Cookie', 'workforce.session_token=one; Path=/; HttpOnly')
+  headers.append('Set-Cookie', 'workforce.session_data=two; Path=/; HttpOnly')
+  forwardCookies(response, headers)
+  assert.deepEqual(appended, [
+    ['Set-Cookie', 'workforce.session_token=one; Path=/; HttpOnly'],
+    ['Set-Cookie', 'workforce.session_data=two; Path=/; HttpOnly'],
+  ])
+})
+test('watCalendarDay uses Africa/Lagos date boundaries for date-only fields', () => {
+  assert.equal(watCalendarDay(new Date('2026-10-26T22:30:00.000Z')).getTime(), day('2026-10-26').getTime())
+  assert.equal(watCalendarDay(new Date('2026-10-26T23:30:00.000Z')).getTime(), day('2026-10-27').getTime())
+})
+test('TRUST_PROXY stays off by default and accepts explicit hop or named values', () => {
+  assert.equal(readTrustProxy(undefined), false)
+  assert.equal(readTrustProxy(''), false)
+  assert.equal(readTrustProxy('false'), false)
+  assert.equal(readTrustProxy('0'), false)
+  assert.equal(readTrustProxy('true'), 1)
+  assert.equal(readTrustProxy('1'), 1)
+  assert.equal(readTrustProxy('loopback'), 'loopback')
+  assert.throws(() => readTrustProxy('-1'), /TRUST_PROXY/)
+})
+test('email failure limit is a small fixed ceiling', () => {
+  assert.equal(EMAIL_FAILURE_LIMIT, 5)
 })

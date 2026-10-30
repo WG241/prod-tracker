@@ -1,3 +1,16 @@
+export function readTrustProxy(value: string | undefined = process.env.TRUST_PROXY) {
+  const raw = value?.trim()
+  if (!raw || raw === '0' || /^false$/i.test(raw)) return false as const
+  if (/^true$/i.test(raw)) return 1
+  if (/^-?\d+$/.test(raw)) {
+    const hops = Number(raw)
+    if (!Number.isInteger(hops) || hops < 1) throw new Error('TRUST_PROXY must be a positive hop count, false, or an Express trust proxy value')
+    return hops
+  }
+  // Express also accepts named ranges such as "loopback" after an explicit deploy decision.
+  return raw
+}
+
 export function readConfig() {
   const connectionString = process.env.DATABASE_URL
   try {
@@ -21,5 +34,6 @@ export function readConfig() {
     development,
     port,
     host: process.env.HOST ?? (development ? '127.0.0.1' : '0.0.0.0'),
+    trustProxy: readTrustProxy(),
   }
 }

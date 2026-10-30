@@ -12,6 +12,37 @@ export function providerHeaders(incoming: { cookie?: string; origin?: string; 'u
   return headers
 }
 
+function isSessionCookieName(name: string) {
+  // Better Auth adds the __Secure- prefix when useSecureCookies is enabled.
+  return name === 'workforce.session_token' || name === '__Secure-workforce.session_token'
+}
+
+function tokenFromPair(pair: string) {
+  const eq = pair.indexOf('=')
+  if (eq === -1) return null
+  const name = pair.slice(0, eq).trim()
+  if (!isSessionCookieName(name)) return null
+  return decodeURIComponent(pair.slice(eq + 1).trim())
+}
+
+function sessionTokenFrom(headers: Headers) {
+  const raw = headers.get('cookie')
+  if (!raw) return null
+  for (const segment of raw.split(';')) {
+    const token = tokenFromPair(segment)
+    if (token) return token
+  }
+  return null
+}
+
+function sessionTokenFromSetCookie(headers: Headers) {
+  for (const cookie of headers.getSetCookie()) {
+    const token = tokenFromPair(cookie.split(';', 1)[0] ?? '')
+    if (token) return token
+  }
+  return null
+}
+
 export function createAuthService(db: PrismaClient, auth: AuthProvider) {
   async function audit(action: string, session: { id: string; userId: string }) {
     await db.auditEvent.create({ data: { actorId: session.userId, action, targetType: 'AuthSession', targetId: session.id } })
@@ -23,11 +54,33 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
   async function revoke(session: { id: string; userId: string }, all: boolean, headers: Headers) {
     await audit('auth.revocation.requested', session)
     await db.authSession.deleteMany({ where: all ? { userId: session.userId } : { id: session.id } })
+    // Match signOut(): do not claim revocation or forward clearing cookies until the
+    // targeted rows are confirmed gone. Better Auth can catch deletion failures.
+    const remaining = await db.authSession.count({
+      where: all ? { userId: session.userId } : { id: session.id },
+    })
+    if (remaining > 0) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
     const result = await auth.api.signOut({ headers, returnHeaders: true })
     await outcome('auth.revocation.completed', session)
     return result.headers
   }
   async function current(headers: Headers) {
+    // Resolve eligibility from the persisted session before getSession so daily
+    // renewal cannot extend an ineligible session that we are about to revoke.
+    const token = sessionTokenFrom(headers)
+    if (token) {
+      const existing = await db.authSession.findUnique({
+        where: { token },
+        select: { id: true, userId: true, expiresAt: true },
+      })
+      if (existing && existing.expiresAt > new Date()) {
+        const staff = await staffContext(db, existing.userId)
+        if (!staff) {
+          const person = await db.user.findUnique({ where: { id: existing.userId }, select: { accountStatus: true } })
+          return { context: null, headers: await revoke(existing, person?.accountStatus === 'INACTIVE', headers) }
+        }
+      }
+    }
     const result = await auth.api.getSession({ headers, returnHeaders: true })
     if (!result.response) return { context: null, headers: result.headers }
     const session = result.response.session
@@ -48,7 +101,23 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
       if (error instanceof APIError && error.body?.code === 'ACCOUNT_UNAVAILABLE') throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
       throw error
     }
-    const session = await db.authSession.findUnique({ where: { token: result.response.token } })
+    // Prefer the documented response token, then Set-Cookie, then newest user session.
+    const tokenCandidates = [
+      typeof result.response.token === 'string' ? result.response.token : null,
+      sessionTokenFromSetCookie(result.headers),
+    ]
+    let session = null
+    for (const token of tokenCandidates) {
+      if (!token) continue
+      session = await db.authSession.findUnique({ where: { token } })
+      if (session) break
+    }
+    if (!session && typeof result.response.user?.id === 'string') {
+      session = await db.authSession.findFirst({
+        where: { userId: result.response.user.id },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
     if (!session) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
     try {
       const staff = await staffContext(db, session.userId)

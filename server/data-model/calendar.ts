@@ -39,6 +39,12 @@ export function watMidnight(value: Date) {
   return new Date(`${isoDay(value)}T00:00:00.000+01:00`)
 }
 
+export function watCalendarDay(at = new Date()) {
+  // Date-only fields use UTC midnight (`day()`). WAT (UTC+01:00) calendar day
+  // equals the UTC calendar day of (at + 1 hour).
+  return day(isoDay(new Date(at.getTime() + 3_600_000)))
+}
+
 export function referenceForWeek(freezesAt: Date, asOf: Date) {
   return new Date(Math.min(asOf.getTime(), freezesAt.getTime() - 1))
 }
