@@ -7,6 +7,11 @@ import { forwardCookies } from '../../server/auth/router.ts'
 import { day, watCalendarDay } from '../../server/data-model/calendar.ts'
 import { roleRoutes, routeContext, validPassword } from '../../src/features/auth/contracts.ts'
 import { readTrustProxy } from '../../server/config.ts'
+import {
+  AUTH_FIXTURE_PERSON_IDS,
+  requireAuthFixtureTarget,
+  requireOperatorDatabase,
+} from '../../server/auth/operator-target.ts'
 import { EMAIL_FAILURE_LIMIT, throttleKey } from '../../server/auth/throttle.ts'
 
 // AC-5, AC-8: boundary values, fixed routes and secure configuration.
@@ -79,4 +84,21 @@ test('TRUST_PROXY stays off by default and accepts explicit hop or named values'
 })
 test('email failure limit is a small fixed ceiling', () => {
   assert.equal(EMAIL_FAILURE_LIMIT, 5)
+})
+test('operator database target allows Neon and loopback after host override checks', () => {
+  assert.equal(requireOperatorDatabase('postgresql://user@127.0.0.1/prod_tracker').hostname, '127.0.0.1')
+  assert.equal(requireOperatorDatabase('postgresql://user@ep.neon.tech/neondb').hostname, 'ep.neon.tech')
+})
+test('auth fixtures allow Neon but keep loopback origin and nonproduction', () => {
+  assert.equal(AUTH_FIXTURE_PERSON_IDS.length, 5)
+  const neon = 'postgresql://user@ep.neon.tech/neondb?sslmode=require'
+  assert.equal(requireAuthFixtureTarget({
+    connectionString: neon, origin: 'http://127.0.0.1:5173',
+  }).hostname, 'ep.neon.tech')
+  assert.throws(() => requireAuthFixtureTarget({
+    connectionString: neon, origin: 'https://app.example',
+  }), /loopback BETTER_AUTH_URL/)
+  assert.throws(() => requireAuthFixtureTarget({
+    connectionString: neon, origin: 'http://127.0.0.1:5173', nodeEnv: 'production',
+  }), /nonproduction/)
 })

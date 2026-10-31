@@ -42,7 +42,7 @@ These user approved skills are installed. Their setup examples do not override t
 
 Features 1 through 3 are implemented. Feature 4's approved shell and Feature 5's approved proof are still unbuilt. Feature 6 UI integration and verification require Feature 4's shell and controls to exist first; do not silently implement Feature 4 inside this run or claim that its design alone satisfies the dependency. Feature 5 is not an authentication prerequisite.
 
-Keep the accepted native local PostgreSQL and PrismaPg architecture. No public registration, invitation delivery, password recovery, password change UI, MFA, SSO, or account administration page is introduced. Those exclusions are a scope decision, not a claim of certification or completion of those capabilities. The HR account administration feature must later consume the trusted provisioning boundary rather than create credentials through a public signup route.
+Keep the accepted Neon PostgreSQL and PrismaPg architecture. No public registration, invitation delivery, password recovery, password change UI, MFA, SSO, or account administration page is introduced. Those exclusions are a scope decision, not a claim of certification or completion of those capabilities. The HR account administration feature must later consume the trusted provisioning boundary rather than create credentials through a public signup route.
 
 ### Data model
 
@@ -66,7 +66,7 @@ Add these five models through a normal reviewed Prisma migration. Preserve all o
 
 ### Provisioning and local accounts
 
-Add an explicit operator command, for example `npm run auth:provision -- --user-id <existing id>`. It starts no HTTP listener. Require an existing Active person with a nonempty name, a current effective assignment, and valid canonical email. Read and confirm the password from a hidden TTY prompt; never accept a real staff password as a command argument, print it, or save it in a profile field. Remote execution requires an explicit command flag acknowledging the configured remote database, preserving TLS validation.
+Add an explicit operator command, for example `npm run auth:provision -- --user-id <existing id>`. It starts no HTTP listener. Require an existing Active person with a nonempty name, a current effective assignment, and valid canonical email. Read and confirm the password from a hidden TTY prompt; never accept a real staff password as a command argument, print it, or save it in a profile field. Neon and other remote PostgreSQL targets are allowed; preserve TLS validation.
 
 The private library configuration allows only this command's server side `signUpEmail` call, disables automatic sign in and all mail, and forces the new auth user id/name/email from the validated staff record. It is not imported or enabled by an HTTP route. Use the library's normal credential creation and configured hasher; do not implement password cryptography or a second credential format.
 
@@ -76,7 +76,7 @@ Verify the selected SDK/adapter's identity and credential pair creation transact
 
 Provisioning audit uses the existing System actor (`actorId: null`), action, `targetType: AuthUser`, the Workforce/auth id as targetId, and source `trusted-operator-command`. This records a trusted process action; it does not fabricate the identity of a signed in HR user. HR UI operations added later must use the actual HR actor. Reject connection query parameters named host, hostaddr or service (case insensitive) before classifying a target as local or remote, so a query override cannot evade either command's target check.
 
-Add a separate `npm run auth:seed` for Ada Okafor, Tunde Bakare, Amara Bello, David Cole and Kemi Adebayo, using their existing `person-*` fixture ids. It requires an explicitly supplied ignored `LOCAL_AUTH_TEST_PASSWORD` that satisfies the policy. It runs only with a loopback database, a loopback auth origin and a nonproduction environment. Reject connection query host overrides, not just a nonlocal URL authority. No password is checked into Git or prefilled in the product login form. Repeated runs preserve ready credentials and active sessions. The base `db:seed` still works without auth configuration or an auth test password.
+Add a separate `npm run auth:seed` for Ada Okafor, Tunde Bakare, Amara Bello, David Cole and Kemi Adebayo, using their existing `person-*` fixture ids. It requires an explicitly supplied ignored `LOCAL_AUTH_TEST_PASSWORD` that satisfies the policy. It requires a nonproduction environment and a loopback auth origin (local browser preview against `BETTER_AUTH_URL`). The database may be Neon (project default) or another PostgreSQL target. Reject connection query host overrides, not just a nonlocal URL authority. No password is checked into Git or prefilled in the product login form. Repeated runs preserve ready credentials and active sessions. The base `db:seed` still works without auth configuration or an auth test password and may write to Neon.
 
 ### Session lifecycle and cookie boundary
 

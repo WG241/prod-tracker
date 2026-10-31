@@ -5,14 +5,14 @@ Internal weekly performance tracker for Workforce Group. Five roles: Employee, L
 ## Stack
 
 - **Language / Runtime**: strict TypeScript, Node 24, npm 11 (Vite 8)
-- **Framework**: React 19 + Vite, Express 5 in one Node service
+- **Framework**: React 19 + Vite for the browser UI; Express 5 as the API and HTML server in one Node process
 - **Key dependencies**: Prisma 7, PrismaPg, pg, Tailwind CSS v4, Lucide
 - **Package manager**: npm
-- **Database**: native local PostgreSQL 18.6 via PrismaPg; Neon uses the same PostgreSQL TCP adapter (spec `docs/specs/0001-stack-and-architecture/index.md`).
+- **Database**: Neon PostgreSQL via PrismaPg (standard PostgreSQL TCP). The app process still runs on your machine; the database does not. Spec `docs/specs/0001-stack-and-architecture/index.md` (operational amendment: Neon-first).
 
 ## Build approach
 
-**Facade** (UI first, wired to a locally migrated database with seed mock rows so UI, API, and backend already work on live local data; harden from there).
+**Facade** (UI first, wired to a migrated Neon database with seed mock rows so UI, API, and backend already work on live data; harden from there).
 
 **Role journey:** finish one user group before the next. Recommended default: Employee → Line Manager → Business Director → Executive → HR / Admin. Shared surfaces (profile, in app notifications, email alerts) land when the first role that needs them is in progress.
 
@@ -24,7 +24,7 @@ Internal weekly performance tracker for Workforce Group. Five roles: Employee, L
 # Install
 npm install
 
-# Dev server
+# Dev server (Express + Vite on one origin)
 npm run dev
 
 # Build
@@ -33,22 +33,17 @@ npm run build
 # Lint
 npm run lint
 
-# Database
-npm run db:setup
-npm run db:start
+# Database (Neon URLs in .env)
 npm run db:generate
 npm run db:migrate
 npm run db:seed
 npm run db:studio
-
-# Local data model checks, including rollback constraint probes
 npm run db:verify
-npm run db:stop
 
 # Production (after build)
 npm run start
 
-# Test (explicit separate local TEST_DATABASE_URL is required)
+# Test (explicit separate TEST_DATABASE_URL, not the ordinary Neon DB)
 npm run test:setup
 npm test
 ```
@@ -62,8 +57,9 @@ Feature 1 records the existing scaffold conventions here. Use Node 24 and npm 11
 - Use function components and hooks. Name components and their files in PascalCase, hooks as `useName`, and other functions and variables in camelCase. Keep related feature code together and extract shared code only when it has real consumers.
 - `src/main.tsx` is the browser entry. Keep Node globals, database clients, and credentials out of browser imports. `server/db.ts` owns PrismaPg. `tsconfig.server.json` compiles server code, `tsconfig.node.json` checks tooling, and `tsconfig.app.json` checks browser code with Vite types.
 - Change `prisma/schema.prisma` and regenerate the client instead of editing `src/generated/`. Generated clients, dependencies, build output, and local environment files stay out of Git. Only public configuration may use a `VITE_` prefix.
+- **Database work is idempotent and atomic** (see Rules below). Prefer hardening the migration or action you are authoring over stacking a second migration that only “overrides” the first. Seed, auth operator scripts, and domain writes follow the same bar.
 - Run `npm run lint` for Oxlint with warnings treated as failures. `npm run lint:fix` applies normal lint fixes. `npm run typecheck` checks all TypeScript projects and emits server JavaScript. `npm run check` runs lint and the production build, which includes type checking.
-- A clean build is a tooling check. Feature acceptance still requires `/check verify` on the running app and any tests required by the scope. `npm test` type checks tests and operator scripts, then runs Node/tsx authentication tests against an explicit separate local test database.
+- A clean build is a tooling check. Feature acceptance still requires `/check verify` on the running app and any tests required by the scope. `npm test` type checks tests and operator scripts, then runs Node/tsx authentication tests against an explicit separate `TEST_DATABASE_URL` (never the ordinary Neon development database).
 
 ## Specs
 
@@ -92,12 +88,17 @@ Tokens and type notes (supporting, not a second design): `docs/design-tokens.md`
 - **One feature per run.** Build a single scope feature (or a single milestone under it) per agent session. Do not batch unrelated features.
 - **One role group at a time.** Complete the current user group’s planned features (and required shared deps) before starting the next role. If the user did not name a role or feature, **ask** which role to continue, using the recommended order above as the default suggestion.
 - **New chat = resume from git + scope.** At the start of every new session, before building: (1) `git status` and recent `git log` (last commit + unstaged/uncommitted files), (2) read `docs/scope/index.md` At a glance for the first non-done, non-existing feature in the active role, (3) open that feature’s spec under `docs/specs/` if it exists. Continue from the first unticked checkbox. Do not restart a finished foundation.
-- **UI then API on seeded DB.** Implement against real local migrations and seed data; do not leave screens on in memory fake data when the skeleton exists.
+- **UI then API on seeded DB.** Implement against real Neon migrations and seed data; do not leave screens on in memory fake data when the skeleton exists.
 - **Verify before done.** For Alpha features: `/check verify` must pass on the real app before offering `done`. When a feature has `Test it` or the user requires regression tests, `/test` (or the project test command) must pass before handover. Do not mark `done` on failing verify or tests.
 - **Modular boundaries.** Prefer small modules per feature area (UI route/page, API handlers, Prisma models touched). Avoid drive by refactors outside the feature’s code pointer.
 - **Workflow skills required.** If `/develop`, `/architect`, `/scope`, `/check`, `/test`, `/audit`, `/sync`, `/debug`, `/document` (or the equivalent skill files) are missing for this IDE, install the full workflow set from `https://github.com/jsmastery-pro/skills` before building product features. See README “Install workflow skills”.
 - **English only** product copy for this release.
 - **Single org:** Workforce Group only (no multi tenant product surface).
+- **Idempotent and atomic database work.**
+  - **Atomic:** Multi-step schema or data changes that must succeed together run in one PostgreSQL transaction and roll back on any failure. Prefer Prisma’s default transactional migration apply. Do not use `CREATE INDEX CONCURRENTLY` or other non-transactional DDL inside a normal migration unless a reviewed exception says otherwise. App writes, seeds, and auth operator scripts that touch multiple rows use one transaction (or an explicit saga with compensating steps documented in the feature spec).
+  - **Idempotent migrations:** Author SQL so a second run against an already-updated database is a no-op, not an error. Use `IF NOT EXISTS` / `IF EXISTS`, `CREATE OR REPLACE` for functions, and `DO $$ … $$` existence checks before `ADD CONSTRAINT` (Postgres has no `ADD CONSTRAINT IF NOT EXISTS`). Prefer updating the migration under review to be re-runnable instead of adding a follow-up migration whose only job is to paper over a non-idempotent predecessor.
+  - **Additive schema history:** Do not change the *intent* of a migration that has already been applied in shared environments. Schema corrections that change meaning stay additive. Safe idempotency hardening of a migration that was just authored (or repair of checksums after that hardening) is allowed; if the file content changes after apply, update `_prisma_migrations.checksum` in every database that already recorded that migration.
+  - **Idempotent actions:** Seeds and operator commands upsert mutable fixtures and create immutable evidence only when absent; repeating them must not duplicate rows or rewrite historical timestamps. Domain APIs should be safe under retry where the product contract allows (same request key / natural key → same outcome).
 
 ## Agent skills
 

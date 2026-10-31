@@ -14,7 +14,7 @@ Persistent PostgreSQL counters use HMAC email and direct socket IP keys. Do not 
 
 Audit requested evidence precedes revocation and sign out. Successful email counter cleanup and sign in completion audit commit together before cookies are forwarded. Activation and its System audit event commit together. Tokens, hashes, cookies, passwords and request bodies never belong in app JSON or logs.
 
-`provision.ts` is a private operator boundary. Keep its pending, ready, verified resume and guarded repair behavior. Preserve ready credentials and sessions during reseeding. Normal database commands do not require auth configuration.
+`provision.ts` is a private operator boundary. Keep its pending, ready, verified resume and guarded repair behavior. Preserve ready credentials and sessions during reseeding. Normal database commands do not require auth configuration. Operator CLIs share `operator-target.ts` for connection validation (Neon allowed); `auth:seed` also keeps a loopback `BETTER_AUTH_URL` and nonproduction env so local preview can sign in against Neon data.
 
 ## Agent skills
 
@@ -24,6 +24,6 @@ Audit requested evidence precedes revocation and sign out. Successful email coun
 
 The optional Better Auth documentation MCP is deferred. Installed package source governs version specific behavior. The chosen exclusions override setup examples that enable signup or mail.
 
-Tests use Node/tsx and an explicitly configured local `prod_tracker_auth_test` database. The ordinary database must have a different decoded database name, even through host aliases. Never reset the ordinary database or remove append only audit evidence. Browser checks remain separate from HTTP assertions.
+Tests use Node/tsx and an explicitly configured separate `TEST_DATABASE_URL` (Neon branch or another database name). The ordinary development database must have a different decoded database name, even through host aliases. Never reset the ordinary database or remove append only audit evidence. Browser checks remain separate from HTTP assertions.
 
 _Maintained by /sync from the introducing change._

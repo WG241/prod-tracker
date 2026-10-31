@@ -1,6 +1,6 @@
 # Epic: Foundations
 
-Ground every role slice. Facade still needs a real local database with migrations and seed mock rows so UI, API, and backend work on live local data from the first wired screens.
+Ground every role slice. Facade still needs a real Neon database with migrations and seed mock rows so UI, API, and backend work on live data from the first wired screens.
 
 ## Existing
 

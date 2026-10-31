@@ -228,6 +228,7 @@ model EmploymentAssignment {
   @@index([userId, effectiveFrom])
   @@index([businessId, role])
   @@index([managerId, effectiveTo])
+  @@index([unitId, businessId])
 }
 
 model WorkWeek {
@@ -243,6 +244,8 @@ model WorkWeek {
   lockedBy User?            @relation(fields: [lockedById], references: [id], onDelete: Restrict)
   trackers WeeklyTracker[]
   unlocks  PlanningUnlock[]
+
+  @@index([lockedById])
 }
 
 model WeeklyTracker {
@@ -264,6 +267,7 @@ model WeeklyTracker {
   @@unique([userId, weekId])
   @@unique([id, userId])
   @@index([weekId, assignmentId])
+  @@index([assignmentId, userId])
 }
 
 model TaskSeries {
@@ -275,6 +279,7 @@ model TaskSeries {
   tasks WeeklyTask[]
 
   @@unique([id, ownerId])
+  @@index([ownerId])
 }
 
 model WeeklyTask {
@@ -308,6 +313,9 @@ model WeeklyTask {
   @@unique([id, seriesId])
   @@index([trackerId, status])
   @@index([ownerId, deletedAt])
+  @@index([seriesId, ownerId])
+  @@index([trackerId, ownerId])
+  @@index([carriedFromId, seriesId])
 }
 
 model TaskComment {
@@ -321,6 +329,7 @@ model TaskComment {
   author User       @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   @@index([weeklyTaskId, createdAt])
+  @@index([authorId])
 }
 
 model ApprovalRequest {
@@ -342,6 +351,9 @@ model ApprovalRequest {
 
   @@unique([weeklyTaskId, attemptNumber])
   @@index([assignedManagerId, state, submittedAt])
+  @@index([weeklyTaskId, submittedById])
+  @@index([submittedById])
+  @@index([submissionAssignmentId, submittedById])
 }
 
 model ApprovalDecision {
@@ -361,6 +373,9 @@ model ApprovalDecision {
   relief    ReliefAssignment? @relation(fields: [reliefAssignmentId], references: [id], onDelete: Restrict)
 
   @@index([decidedAt])
+  @@index([actorId])
+  @@index([actingForManagerId])
+  @@index([reliefAssignmentId])
 }
 
 model LeaveRecord {
@@ -380,6 +395,7 @@ model LeaveRecord {
 
   @@unique([id, userId])
   @@index([userId, startsOn, expectedReturnOn])
+  @@index([cancelledById])
 }
 
 model ReliefAssignment {
@@ -402,6 +418,8 @@ model ReliefAssignment {
 
   @@index([coveredManagerId, startsOn, endsOn])
   @@index([reliefManagerId, startsOn, endsOn])
+  @@index([leaveId, coveredManagerId])
+  @@index([endedById])
 }
 
 model TrackerSettings {
@@ -421,6 +439,8 @@ model TrackerSettings {
   updatedAt           DateTime @updatedAt @db.Timestamptz(3)
 
   updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([updatedById])
 }
 
 model PlanningUnlock {
@@ -445,6 +465,11 @@ model PlanningUnlock {
   revokedBy User?     @relation("UnlockRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
 
   @@index([weekId, expiresAt])
+  @@index([userId])
+  @@index([unitId])
+  @@index([businessId])
+  @@index([grantedById])
+  @@index([revokedById])
 }
 
 model AuditEvent {
@@ -461,6 +486,7 @@ model AuditEvent {
 
   @@index([targetType, targetId, createdAt])
   @@index([createdAt])
+  @@index([actorId])
 }
 
 model Notification {
@@ -484,6 +510,9 @@ model Notification {
 
   @@unique([recipientId, deduplicationKey])
   @@index([recipientId, readAt, createdAt])
+  @@index([weeklyTaskId])
+  @@index([leaveId])
+  @@index([reliefAssignmentId])
 }
 
 model EmailDelivery {

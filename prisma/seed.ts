@@ -1,13 +1,12 @@
 import 'dotenv/config'
 import { readConfig } from '../server/config.ts'
 import { createDatabase } from '../server/db.ts'
+import { requireOperatorDatabase } from '../server/auth/operator-target.ts'
 import { createSeedPlan } from './fixtures/plan.ts'
 import { validateSeedPlan } from './fixtures/validate.ts'
 
 const connectionString = readConfig().connectionString
-if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(connectionString).hostname)) {
-  throw new Error('The fixture seed requires a local development database')
-}
+requireOperatorDatabase(connectionString)
 const prisma = createDatabase(connectionString)
 try {
   const plan = createSeedPlan()

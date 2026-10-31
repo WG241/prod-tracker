@@ -4,6 +4,12 @@ Feature 6 uses Better Auth 1.7.13 with PostgreSQL sessions. Workforce people and
 
 HTTP startup requires private `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` values. Generate the secret from at least 32 random bytes. The URL is a fixed origin, without credentials, a path, query or fragment. Use HTTPS remotely. Explicit loopback HTTP is supported for development and compiled production verification. The normal local origins are `http://127.0.0.1:5173` and `http://127.0.0.1:3000`, respectively. Set the origin to the one being tested, since mutation requests must match exactly.
 
+## Database target (Neon-first)
+
+Development and deployment use **Neon PostgreSQL**. Put pooled `DATABASE_URL` and direct `DATABASE_URL_UNPOOLED` in `.env` (see `.env.example`).
+
+Operator CLIs (`db:seed`, `auth:seed`, `auth:provision`, `auth:prune`, and similar) may write to Neon. Shared checks in `server/auth/operator-target.ts` still reject database connection query overrides for host, hostaddr and service. Retain PostgreSQL certificate validation. Prefer Neon’s current connection string from the console; if `pg` warns about `sslmode`, use the documented `uselibpqcompat=true&sslmode=require` form or `sslmode=verify-full`.
+
 Database migrate, seed and verify commands do not require auth settings. Apply migrations and generate the client before starting the updated app:
 
 ```sh
@@ -33,13 +39,18 @@ If a pending identity has no credential, session or prior activation evidence, t
 npm run auth:provision -- --user-id person-id --repair-incomplete
 ```
 
-A remote database requires `--acknowledge-remote-database`. The command rejects database connection query overrides for host, hostaddr and service. Retain PostgreSQL certificate validation when using Neon.
+## Fixtures and tests
 
-## Local fixtures and tests
+For the five fictional Ada, Tunde, Amara, David and Kemi accounts, explicitly supply an ignored `LOCAL_AUTH_TEST_PASSWORD`, then run `npm run auth:seed`. The command requires nonproduction and a loopback auth origin (so the local app at `BETTER_AUTH_URL` can sign in against Neon data):
 
-For the five fictional Ada, Tunde, Amara, David and Kemi accounts, explicitly supply an ignored `LOCAL_AUTH_TEST_PASSWORD`, then run `npm run auth:seed`. The command requires nonproduction and loopback database and auth origins. Repeating it preserves ready credentials and sessions. The base `npm run db:seed` remains independent of auth credentials.
+```sh
+npm run db:seed
+npm run auth:seed
+```
 
-Create a separate local database named `prod_tracker_auth_test`, owned by the application database role, and set an explicit private `TEST_DATABASE_URL` pointing to it. It must differ from the ordinary development database. The setup command deploys migrations and runs the normal idempotent fixture seed. It never resets a database.
+Repeating either command preserves ready credentials and sessions (or existing fixture rows). The base `npm run db:seed` remains independent of auth credentials.
+
+Create a **separate** test database (Neon branch or another database name), owned for test use, and set an explicit private `TEST_DATABASE_URL` pointing to it. It must differ from the ordinary development database. The setup command deploys migrations and runs the normal idempotent fixture seed. It never resets a database.
 
 ```sh
 npm run test:setup
@@ -60,8 +71,6 @@ Run maintenance explicitly to remove expired sessions and throttle windows. It d
 npm run auth:prune
 ```
 
-Remote maintenance also requires `--acknowledge-remote-database`. No scheduler is installed.
-
 Only `/api/auth/sign-in`, `/api/auth/sign-out` and `/api/session` are exposed. Password recovery, registration, email changes, account deletion, OAuth and impersonation are unavailable. Forgot password explains that recovery is not yet available. HR account administration remains a later feature.
 
-Development tools live at `/__ui`, `/__ui?view=workspace` and `/__data-proof`. They do not mint sessions or change the current person's role. The data proof retains its separate local guards. Production excludes these tool bundles and routes them through ordinary authentication navigation.
+Development tools live at `/__ui`, `/__ui?view=workspace` and `/__data-proof`. They do not mint sessions or change the current person's role. The data-proof route only mounts when the configured database host is loopback (it was built as a local-engine guardrail); with Neon it stays off and authenticated product APIs are the path forward. Production excludes these tool bundles and routes them through ordinary authentication navigation.

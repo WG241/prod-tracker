@@ -1,15 +1,19 @@
 # 0001. Stack and architecture
 
 **Date**: 2026-10-26
-**Status**: Accepted
+**Status**: Accepted (operational amendment 2026-10-31: Neon-first)
 
 ## Summary
 
-Keep the React application and add Express to serve its API from the same Node service. Use native PostgreSQL on this Windows machine for development, with PrismaPg making standard PostgreSQL connections locally and on Neon. First prove the connection with a migrated and seeded database and a small health request from the browser.
+Keep the React application and add Express to serve its API from the same Node service. Use PrismaPg for standard PostgreSQL TCP against **Neon** for day-to-day development and deployment. First prove the connection with a migrated and seeded database and a small health request from the browser.
+
+## Operational amendment (2026-10-31)
+
+Workforce develops against **Neon PostgreSQL**, not a native local Postgres install. The Windows `npm run db:setup` / `db:start` helper remains in the repo as unused optional tooling; do not document or require it for onboarding. Operator CLIs may write to Neon without a remote-acknowledgment flag. Historical verify notes below that mention local PostgreSQL 18.6 record past evidence only.
 
 ## Decision
 
-Choose one Node service with Express 5, the existing Vite and React application, native local PostgreSQL, and Prisma 7 through `@prisma/adapter-pg`. The user selected this arrangement during the architecture conversation. The development database is local; the existing Neon configuration remains available for later deployment.
+Choose one Node service with Express 5, the existing Vite and React application, Neon PostgreSQL, and Prisma 7 through `@prisma/adapter-pg`. Browser UI remains React + Vite; Express is the API and production static file server so `/api` and the SPA share one origin.
 
 This is the architecture decision for scope Feature 2. Its execution milestones live in `docs/scope/foundations.md`. The full product data model, authentication, shared design system, and core entity API remain separate scope features.
 
@@ -21,8 +25,8 @@ This is the architecture decision for scope Feature 2. Its execution milestones 
 | Browser application | Existing React 19, Vite 8, Tailwind 4, Lucide | Preserve the prototype based UI path. |
 | Application pattern | One service, with feature modules inside it | Keep one deployment and make the browser and API share an origin. |
 | API framework | Express 5 | The user chose straightforward routing and familiar conventions. |
-| Development database | Native PostgreSQL on Windows, with a persistent local data directory | Exercise the same database engine used for deployment. |
-| Deployment database | Neon PostgreSQL, configured through environment variables | Retain the existing deployment preparation. |
+| Development database | Neon PostgreSQL via environment variables | Same engine and connection path as deployment; no local Postgres install. |
+| Deployment database | Neon PostgreSQL, configured through environment variables | Same PrismaPg TCP path as development. |
 | Database access | Prisma 7 with `@prisma/adapter-pg` | Use the same TCP connection path locally and on Neon. |
 | Migration connection | `DATABASE_URL_UNPOOLED` in `prisma.config.ts` | Keep migration operations on a direct database connection. |
 | Runtime connection | `DATABASE_URL` on the Node service only | Keep database credentials and clients outside the browser bundle. |
@@ -38,15 +42,13 @@ This is the architecture decision for scope Feature 2. Its execution milestones 
 
 In development, the server enables Vite middleware before the SPA fallback (the handler that serves the application for browser routes). In production, it serves `dist/` and uses the same API handlers. Mount API handling first. An unknown `/api/*` request returns a JSON 404, never the SPA HTML. Only browser GET navigation may use the SPA fallback. The server closes its HTTP listener, Vite instance when present, and database pool on shutdown.
 
-### Native local database setup
+### Neon database setup
 
-Use the PostgreSQL Windows distribution linked by the official PostgreSQL project. Prefer a workspace scoped installation and data directory when the official binaries support it; do not require a Windows service for this project. Record the installed executable version during setup. Keep binaries, local data, generated credentials, and database logs ignored by Git.
-
-Create a dedicated development database and role. Bind PostgreSQL to loopback and use password authentication. Use a separate local shadow database for Prisma migration comparisons if required by the role permissions. Do not run migrations against the existing Neon database. Preserve the existing `.env` in an ignored backup before switching the active connection variables to local PostgreSQL, and do not overwrite an existing backup.
+Copy the Neon pooled runtime URL into `DATABASE_URL` and the direct migration URL into `DATABASE_URL_UNPOOLED`. Prefer documented TLS settings (`sslmode=require` with `uselibpqcompat=true` when `pg` requires it). Do not set a project `SHADOW_DATABASE_URL` for Neon.
 
 Keep the existing `User` schema unchanged for this foundation. Its columns remain `id` (required string primary key, default cuid), `email` (required unique string), `name` (nullable string), `createdAt` (required timestamp, default now), and `updatedAt` (required timestamp, updated automatically). There are no relationships yet.
 
-Create and apply its initial migration locally. An explicit `npm run db:seed` command uses an upsert by email to create one fictional foundation row, with email `foundation-health@example.invalid` and name `Local foundation check`. Repeating the command preserves a single row. This row proves the database setup; it is not an authenticated employee or the final prototype seed cast. Prisma 7 client generation and seeding run explicitly after migration.
+Create and apply its initial migration against Neon. An explicit `npm run db:seed` command uses an upsert by email to create one fictional foundation row, with email `foundation-health@example.invalid` and name `Local foundation check`. Repeating the command preserves a single row. This row proves the database setup; it is not an authenticated employee or the final prototype seed cast. Prisma 7 client generation and seeding run explicitly after migration.
 
 ### Health contract and proof from the browser
 
@@ -54,7 +56,7 @@ Create and apply its initial migration locally. An explicit `npm run db:seed` co
 |---|---|---|---|---|---|
 | `/api/health` | GET | None | HTTP 200, JSON `{ "status": "ok", "database": "connected" }` | HTTP 503, JSON `{ "status": "unavailable", "database": "unavailable" }` | Public, exposes no employee or configuration data |
 
-Send `Cache-Control: no-store`. Every request checks the live database with `prisma.user.findFirst({ select: { id: true } })`. Completion proves that the migrated `User` table can be queried, even if it is empty. Do not return the query result, names, emails, row counts, database addresses, credentials, or exception text. Verify the fictional seed row separately against the local database; readiness must not require development seed data in deployment.
+Send `Cache-Control: no-store`. Every request checks the live database with `prisma.user.findFirst({ select: { id: true } })`. Completion proves that the migrated `User` table can be queried, even if it is empty. Do not return the query result, names, emails, row counts, database addresses, credentials, or exception text. Verify the fictional seed row separately against the configured Neon database; readiness must not require development seed data in deployment.
 
 | Produced value | Source |
 |---|---|
@@ -70,28 +72,28 @@ The existing browser entry makes one health request when the application boots. 
 
 ### Configuration and operational boundaries
 
-`DATABASE_URL` and `DATABASE_URL_UNPOOLED` stay server only. Document local PostgreSQL examples in `.env.example`. Keep Neon deployment instructions, including the direct migration URL and runtime connection URL. Retire the Neon specific runtime adapter and serverless driver dependencies after PrismaPg replaces all imports. Preserve certificate validation for remote database connections.
+`DATABASE_URL` and `DATABASE_URL_UNPOOLED` stay server only. Document Neon examples in `.env.example`. Preserve certificate validation for Neon connections.
 
-Document development, build, production start, database start and stop, migration, generation, and seed commands. Development binds to loopback and defaults to port 5173. Production takes its listen port from `PORT`, falling back to 3000; allow the listen host to be configured for hosting and local verification. A local PostgreSQL data directory persists across application and database restarts; stopping a process must not delete the database.
+Document development, build, production start, migration, generation, and seed commands. Development binds to loopback and defaults to port 5173. Production takes its listen port from `PORT`, falling back to 3000; allow the listen host to be configured for hosting and local verification.
 
 Authentication is owned by Feature 6. This feature exposes only the narrow readiness endpoint and serves the scaffold. Email, background processing, analytics providers, and deployment vendor selection do not belong to this decision.
 
 ### Verification boundary
 
-Before Feature 2 is done, exercise the following on the real local app:
+Before Feature 2 is done, exercise the following on the real app against Neon:
 
-1. Apply the initial migration and run the explicit seed command twice. Confirm the fictional seed exists exactly once in local PostgreSQL.
+1. Apply the initial migration and run the explicit seed command twice. Confirm the fictional seed exists exactly once.
 2. Load the application in a browser and observe its real `/api/health` request returning HTTP 200 and the documented JSON body.
-3. Stop the local database. Confirm readiness returns the documented HTTP 503, without database details. Restart the database and confirm a later request recovers to HTTP 200 without restarting the app.
-4. Exercise a stalled database connection as well as a refused connection. In local verification, each health request must finish with HTTP 503 within 10 seconds. Confirm the configured connection and query timeouts bound the wait, including an unavailable connection from the pool.
+3. Confirm readiness returns HTTP 503 without database details when the database cannot be reached, and recovers to HTTP 200 without restarting the app once connectivity returns.
+4. Confirm the configured connection and query timeouts bound the wait so health requests finish with HTTP 503 within 10 seconds when the database is unavailable.
 5. Build and start the production server, load the compiled app in a browser, and confirm its health request succeeds. An unknown `/api/*` URL returns JSON 404; a browser navigation route can receive the SPA document.
 6. Confirm missing or invalid required configuration fails startup with a sanitized message. Check that the browser build contains neither database credentials nor imported database client code.
 
 ## Consequences
 
-The app keeps one deployment and one database driver path. Database access has a clear server boundary, and migrations and seed data can be exercised locally before role features land.
+The app keeps one deployment and one database driver path. Database access has a clear server boundary, and migrations and seed data run against Neon before role features land.
 
-Native PostgreSQL adds a local process, installation work, and responsibility for maintaining local data. Express supplies routing but does not choose validation or authentication patterns for later features. Local database checks do not prove Neon credentials or hosted deployment behavior.
+Express supplies routing but does not choose validation or authentication patterns for later features. Operator CLIs still reject connection-string host overrides; they may write to Neon.
 
 ## Follow-up
 

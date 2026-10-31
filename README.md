@@ -11,37 +11,40 @@ This repo is set up so a **junior developer + AI coding IDE** can build feature 
 
 ## Quick start
 
-On a fresh Windows x64 clone, use PowerShell:
+This project develops against **Neon PostgreSQL**. The Node app (Express + Vite/React) runs on your machine; the database is remote.
 
-```powershell
+```sh
 # 1. Create configuration if it does not already exist
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+cp .env.example .env
+# Fill Neon DATABASE_URL and DATABASE_URL_UNPOOLED from the Neon console.
 
 # 2. Install dependencies
 npm install
 
-# 3. Install and initialize native local PostgreSQL
-npm run db:setup
-
-# 4. Apply migrations, generate the client, and seed
+# 3. Apply migrations, generate the client, and seed
 npm run db:migrate
 npm run db:generate
 npm run db:seed
 
-# 5. Privately configure BETTER_AUTH_SECRET and BETTER_AUTH_URL in .env.
-# For fictional account credentials, explicitly set LOCAL_AUTH_TEST_PASSWORD,
-# then run the separate command. See docs/auth-operations.md.
+# 4. Privately set BETTER_AUTH_SECRET, BETTER_AUTH_URL, and LOCAL_AUTH_TEST_PASSWORD
+# in .env, then provision the five fictional accounts. See docs/auth-operations.md.
 npm run auth:seed
 
-# 6. Run Express and Vite together at http://127.0.0.1:5173
+# 5. Run Express and Vite together at http://127.0.0.1:5173
 npm run dev
 ```
 
-For later sessions, run `npm run db:start` and then `npm run dev`. `npm run db:stop` stops PostgreSQL and preserves its data. `npm run db:status` reports whether the local database is running. The helper uses PostgreSQL 18.6 on `127.0.0.1:5433`, verifies the official EDB archive checksum, and keeps its binaries, data, credentials, and logs in ignored `.local/`. It creates separate `prod_tracker` and `prod_tracker_shadow` databases, with a dedicated role that has no superuser or database creation privilege.
+Keep all database credentials outside browser code. `BETTER_AUTH_URL` stays on loopback while you preview on this machine. Use Node 24 and npm 11 (`.node-version`).
 
-`db:setup` writes local credentials to `.env`. It preserves an existing Neon configuration in ignored `.env.neon.local` without overwriting an existing backup. On other platforms, install native PostgreSQL, create a development database and a separate shadow database, then fill `.env` using `.env.example`. Keep all database credentials outside browser code.
+After `db:seed` and `auth:seed`, open http://127.0.0.1:5173/sign-in. All five accounts share the password from `LOCAL_AUTH_TEST_PASSWORD` in `.env` (15–128 characters; never commit a real staff password).
 
-Use Node 24 and npm 11. `.node-version` records the Node major version.
+| Role | Email | Password |
+|------|--------|----------|
+| Employee | `ada.okafor@workforcegroup.com` | `LOCAL_AUTH_TEST_PASSWORD` |
+| Line Manager | `tunde.bakare@workforcegroup.com` | same |
+| Business Director | `amara.bello@workforcegroup.com` | same |
+| Executive | `david.cole@workforcegroup.com` | same |
+| HR / Admin | `kemi.adebayo@workforcegroup.com` | same |
 
 Other useful commands:
 
@@ -53,22 +56,23 @@ Other useful commands:
 | `npm run build` | Type checking and the Vite production build |
 | `npm run check` | Lint and the production build together |
 | `npm run db:studio` | Open Prisma Studio |
-| `npm run db:verify` | Check fixture repeatability, five role projections, and rejected invalid writes against local PostgreSQL |
+| `npm run db:verify` | Check fixture repeatability, five role projections, and rejected invalid writes against the configured database |
 | `npm run start` | Serve the compiled browser app and API in one production Node service |
 | `npm run preview` | Run the same production service after a build |
 | `npm run auth:provision -- --user-id person-id` | Provision an existing eligible person through a hidden terminal prompt |
-| `npm run auth:seed` | Explicitly provision the five fictional local accounts |
+| `npm run db:seed` | Insert fixture people/tasks against Neon |
+| `npm run auth:seed` | Provision the five fictional accounts |
 | `npm run auth:prune` | Remove expired sessions and throttle windows |
-| `npm run test:setup` | Migrate and seed the separate local authentication test database |
+| `npm run test:setup` | Migrate and seed the separate authentication test database |
 | `npm test` | Type check the tests and run the Node and HTTP authentication suite |
 
-Coding conventions are in `AGENTS.md`. `.editorconfig` supplies editor whitespace defaults. There is no standalone formatter. The Node test runner uses tsx and requires a separate explicit local `TEST_DATABASE_URL`. `npm run check` checks tooling; `/check verify` still exercises feature behavior in the running app.
+Coding conventions are in `AGENTS.md`. `.editorconfig` supplies editor whitespace defaults. There is no standalone formatter. The Node test runner uses tsx and requires a separate explicit `TEST_DATABASE_URL` (not the ordinary Neon development database). `npm run check` checks tooling; `/check verify` still exercises feature behavior in the running app.
 
 Sign in configuration, trusted provisioning, recovery from interrupted provisioning, local test setup and proxy limits are documented in [auth operations](docs/auth-operations.md). Real workspaces use the person's current database role. Development previews remain at `/__ui`, `/__ui?view=workspace` and `/__data-proof` and cannot establish a session.
 
 ## Architecture and connection check
 
-The accepted architecture is recorded in [spec 0001](docs/specs/0001-stack-and-architecture/index.md). `server/` holds Express and the PrismaPg database client; `src/` holds browser code. The data model is recorded in [spec 0002](docs/specs/0002-data-model/index.md). `npm run db:seed` preserves existing rows and inserts missing sample identities and evidence in one transaction. It provides 28 staff identities, 35 weekly tasks and 110 weekly roster records, plus the inactive foundation identity. Dates are fixed to October 2026. See the [fixture manifest](prisma/fixtures/README.md) for source corrections and synthetic scenarios. Sample email deliveries remain suppressed. `npm run db:verify` checks the real local database and rolls back its constraint probes.
+The accepted architecture is recorded in [spec 0001](docs/specs/0001-stack-and-architecture/index.md) (Neon-first operational amendment). `server/` holds Express and the PrismaPg database client; `src/` holds the React browser app. You still use React + Vite for UI; Express is the companion API/HTML server in the same Node process so browser and `/api/*` share one origin. The data model is recorded in [spec 0002](docs/specs/0002-data-model/index.md). `npm run db:seed` preserves existing rows and inserts missing sample identities and evidence in one transaction. It provides 28 staff identities, 35 weekly tasks and 110 weekly roster records, plus the inactive foundation identity. Dates are fixed to October 2026. See the [fixture manifest](prisma/fixtures/README.md) for source corrections and synthetic scenarios. Sample email deliveries remain suppressed. `npm run db:verify` checks the configured database and rolls back its constraint probes.
 
 The browser makes a health request on startup and logs its connection result. `GET /api/health` returns `200` with `{ "status": "ok", "database": "connected" }` after querying the migrated table, or `503` with unavailable values if the database cannot be queried. It exposes no employee information or configuration. Unknown `/api/*` routes return JSON 404 responses.
 
@@ -80,7 +84,7 @@ $env:BETTER_AUTH_URL = 'http://127.0.0.1:3000'
 npm run start
 ```
 
-Neon deployments use the same PrismaPg connection path: set `DATABASE_URL` to the runtime connection and `DATABASE_URL_UNPOOLED` to the direct migration connection, with the documented TLS settings in `.env.example`. Build with development dependencies available, apply committed migrations using `npm run db:deploy`, and start the compiled service. The local database helper is for development. Hosting vendor setup and hosted Neon verification remain future deployment work.
+Development and deployment both use Neon through PrismaPg: set `DATABASE_URL` to the runtime (often pooled) connection and `DATABASE_URL_UNPOOLED` to the direct migration connection, with the TLS settings in `.env.example`. Build with development dependencies available, apply committed migrations using `npm run db:deploy`, and start the compiled service. Hosting vendor setup remains future deployment work.
 
 ## Install workflow skills (required for agents)
 
@@ -138,7 +142,7 @@ idea → /scope → /audit → /architect → /develop → /check verify → /te
 
 **Project workflow depth:** **Alpha** by default (develop → verify). Some scope rows are tagged `· Beta` or `· GA` and need more. Still: do not hand off a feature as done if verify (and required tests) failed.
 
-**Build approach:** **Facade on seeded local DB** — UI first, but talking to migrated + seeded Postgres, then harden. Details in `AGENTS.md` and the scope header.
+**Build approach:** **Facade on seeded Neon DB** — UI first, but talking to migrated + seeded Postgres on Neon, then harden. Details in `AGENTS.md` and the scope header.
 
 ## How to build (human + agent)
 
@@ -176,7 +180,7 @@ Tokens in `docs/design-tokens.md` support the prototype; they do not replace it.
 
 ### 4. Backend pattern
 
-- Prefer **UI + API + DB** working together on **local migrations and seed mock data**.
+- Prefer **UI + API + DB** working together on **Neon migrations and seed mock data**.
 - Do not ship “pretty UI on fake memory” once the seeded skeleton exists.
 - Keep changes inside the feature’s module boundaries; avoid unrelated refactors.
 
@@ -245,7 +249,7 @@ Resume from the last commit and unstaged files. Continue the first unticked box 
 
 ## Repo status (honest)
 
-- Foundation: React, Vite, Express, PrismaPg, and native local PostgreSQL, with Neon deployment configuration supported.
+- Foundation: React + Vite UI, Express API in one Node service, PrismaPg against Neon PostgreSQL.
 - Product UI: not built yet; the clickable map is the HTML prototype under `docs/`.
 - Scope: written under `docs/scope/`.
 - Specs: architecture in spec 0001; create later feature specs with `/architect` as you take each `needs a decision` feature.

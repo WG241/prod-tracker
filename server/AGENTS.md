@@ -12,6 +12,6 @@ This area implements architecture [spec 0001](../docs/specs/0001-stack-and-archi
 
 `data-model/calendar.ts` derives weekly assignment attribution and expected working days in Africa/Lagos. Closed weeks use immutable roster snapshots. Role and reporting scope come from dated EmploymentAssignment records, not fields on User. See [spec 0002](../docs/specs/0002-data-model/index.md).
 
-Use `npm run dev` for development. `npm run check` checks and builds both browser and server; `npm run start` runs compiled output. `npm run db:start` starts the persistent local database. Server shutdown closes the HTTP listener, Vite when present, and Prisma's pool.
+Use `npm run dev` for development against Neon (`DATABASE_URL` / `DATABASE_URL_UNPOOLED` in `.env`). `npm run check` checks and builds both browser and server; `npm run start` runs compiled output. Server shutdown closes the HTTP listener, Vite when present, and Prisma's pool.
 
 _Drafted by /sync from the introducing change, worth a quick human pass._

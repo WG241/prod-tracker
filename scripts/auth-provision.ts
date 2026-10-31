@@ -2,7 +2,8 @@ import 'dotenv/config'
 import { emitKeypressEvents } from 'node:readline'
 import { createDatabase } from '../server/db.ts'
 import { readConfig } from '../server/config.ts'
-import { checkedDatabaseTarget, isLoopback, readAuthConfig } from '../server/auth/config.ts'
+import { readAuthConfig } from '../server/auth/config.ts'
+import { requireOperatorDatabase } from '../server/auth/operator-target.ts'
 import { provision } from '../server/auth/provision.ts'
 
 async function hiddenPassword(label: string): Promise<string> {
@@ -31,7 +32,7 @@ async function hiddenPassword(label: string): Promise<string> {
 
 async function main() {
   const args = process.argv.slice(2)
-  const flags = new Set(['--resume', '--repair-incomplete', '--acknowledge-remote-database'])
+  const flags = new Set(['--resume', '--repair-incomplete'])
   const idIndex = args.indexOf('--user-id')
   const id = args[idIndex + 1]
   if (idIndex < 0 || !id || id.startsWith('--') || args.filter((arg) => arg === '--user-id').length !== 1
@@ -39,7 +40,7 @@ async function main() {
     || (args.includes('--resume') && args.includes('--repair-incomplete'))) throw new Error('Use --user-id with optional --resume or --repair-incomplete')
   const config = readAuthConfig()
   const connection = readConfig().connectionString
-  if (!isLoopback(checkedDatabaseTarget(connection).hostname) && !args.includes('--acknowledge-remote-database')) throw new Error('Remote database requires --acknowledge-remote-database')
+  requireOperatorDatabase(connection)
   const db = createDatabase(connection)
   try {
     const password = await hiddenPassword('Password (hidden): ')

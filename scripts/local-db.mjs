@@ -1,3 +1,6 @@
+// Optional legacy helper. This project develops against Neon, not a local
+// Postgres install. Prefer DATABASE_URL from .env.example. Kept for any
+// engineer who still wants a disposable local engine; do not require it.
 import { constants, createReadStream, createWriteStream } from 'node:fs'
 import { access, copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'

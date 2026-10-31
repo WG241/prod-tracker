@@ -2,7 +2,13 @@
 
 These are development examples from `docs/workforce-prototype-updated.html`, with synthetic history to exercise the approved data model. They are not live employee records. `prototype.json` preserves the literal source arrays. `plan.ts` constructs deterministic records and exposes its normalization list as `corrections`. `validate.ts` checks relationships and workflow coherence before the seed transaction starts.
 
-Run `npm run db:seed` against local PostgreSQL. It inserts missing identities and evidence without resetting existing records. It creates the inactive foundation identity on a fresh database and preserves its existing id and timestamps when present. All fixture writes share one transaction. All four email deliveries are Suppressed, with no sender invoked.
+Run against Neon:
+
+```sh
+npm run db:seed
+```
+
+It inserts missing identities and evidence without resetting existing records. It creates the inactive foundation identity on a fresh database and preserves its existing id and timestamps when present. All fixture writes share one transaction. All four email deliveries are Suppressed, with no sender invoked.
 
 | Record | Fixture count |
 |---|---:|

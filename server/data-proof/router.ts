@@ -22,8 +22,8 @@ const failures = {
   SUBMISSION_CONFLICT: [409, 'This submission identity has already been used for a different reply.'],
   PAYLOAD_TOO_LARGE: [413, 'The reply request is too large.'],
   UNSUPPORTED_MEDIA_TYPE: [415, 'Send the reply as UTF-8 JSON.'],
-  FIXTURES_UNAVAILABLE: [503, 'Sample data is unavailable. Run local migrations and seed commands.'],
-  DATABASE_UNAVAILABLE: [503, 'The local database is unavailable. Try again after it restarts.'],
+  FIXTURES_UNAVAILABLE: [503, 'Sample data is unavailable. Run migrations and seed commands.'],
+  DATABASE_UNAVAILABLE: [503, 'The database is unavailable. Try again after it recovers.'],
   INTERNAL_ERROR: [500, 'The proof request could not be completed.'],
 } as const
 

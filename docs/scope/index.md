@@ -4,7 +4,7 @@ Internal weekly performance tracker for Workforce Group. People plan and report 
 
 Five roles from the HTML prototype: Employee, Line Manager, Business Director, Executive, HR / Admin. First release covers all five role happy paths, in app and email alerts, and the shared journeys between them.
 
-**Build approach:** Facade (UI first, wired to a locally migrated database with seed mock rows so UI, API, and backend already work on live local data; harden from there).
+**Build approach:** Facade (UI first, wired to a migrated Neon database with seed mock rows so UI, API, and backend already work on live data; harden from there).
 **Role order:** Journey one user group to completion before the next. Recommended default: Employee → Line Manager → Business Director → Executive → HR / Admin. If a run does not name the role, ask before building.
 **Workflow:** Alpha (after `/develop`, run `/check verify` on the real app). Project default. `/architect` still applies when a feature needs a decision. Tag a feature `· Beta` or `· GA` only when it needs more rigor than Alpha.
 **Build rhythm:** one feature per run; verify before calling done; on a new chat, read last commit and unstaged files plus this scope to resume. Handoff for juniors and AI IDEs: root `README.md` and `AGENTS.md` (prototype UI is the design contract; ask before inventing missing screens).

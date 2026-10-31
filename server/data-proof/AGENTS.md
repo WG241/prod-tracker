@@ -2,7 +2,7 @@
 
 Root `AGENTS.md` and `server/AGENTS.md` apply. This area implements spec [0004](../../docs/specs/0004-seeded-db-api-skeleton/index.md).
 
-`access.ts` determines whether the proof router may be mounted and checks direct socket, Host, configured port, Origin and write Fetch Metadata. It accepts only the approved loopback hosts and rejects database URL host, hostaddr and service query overrides. Forwarded headers never replace those sources. Production and unsafe configurations omit the router and retain the main API fallback.
+`access.ts` determines whether the proof router may be mounted and checks direct socket, Host, configured port, Origin and write Fetch Metadata. It accepts only approved loopback database hosts and rejects database URL host, hostaddr and service query overrides. Forwarded headers never replace those sources. With Neon (the project default), the proof router stays unmounted; authenticated product APIs are the path forward. Production and unsafe configurations omit the router and retain the main API fallback.
 
 `router.ts` exposes only the fixed fictional Ada Week 44 allowlist. Every read, insert and replay revalidates actor, tracker, week and visible task scope. Page size is 20 with a 21st row probe and page range 1 through 10000. Do not broaden this into a production task API or accept caller supplied actor, role, owner or week.
 
