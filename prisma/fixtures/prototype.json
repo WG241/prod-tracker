@@ -1,0 +1,586 @@
+{
+  "seedTasks": [
+    {
+      "id": 1,
+      "title": "Deliver the Lagos client proposal",
+      "activity": "Consolidate the discovery findings, finalise the commercial proposal, and share it with the client.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "In progress",
+      "percent": 60,
+      "employee": "Ada Okafor",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Tunde Bakare",
+          "text": "Please include the revised implementation timeline.",
+          "time": "Mon 19 Oct, 10:24"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Complete candidate shortlist",
+      "activity": "Screen applicants and share a shortlist of 12 candidates for the customer success roles.",
+      "start": "2026-10-19",
+      "end": "2026-10-20",
+      "status": "Approved",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Tue 20 Oct",
+      "percent": 100,
+      "employee": "Ada Okafor",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 3,
+      "title": "Finalise the onboarding pack",
+      "activity": "Update the onboarding checklist and welcome materials for the October intake.",
+      "start": "2026-10-20",
+      "end": "2026-10-22",
+      "status": "Awaiting approval",
+      "percent": 100,
+      "employee": "Ada Okafor",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 4,
+      "title": "Publish the assessment report",
+      "activity": "Compile the assessment outcomes and recommendations for the client review.",
+      "start": "2026-10-21",
+      "end": "2026-10-23",
+      "status": "Blocked",
+      "percent": 0,
+      "employee": "Ada Okafor",
+      "reason": "Waiting for the client to share the final assessment data.",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 5,
+      "title": "Prepare next month’s hiring plan",
+      "activity": "Agree hiring priorities and resource requirements with the recruitment team.",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "Pending",
+      "percent": 0,
+      "employee": "Ada Okafor",
+      "carry": true,
+      "comments": []
+    },
+    {
+      "id": 6,
+      "title": "Share weekly recruitment insights",
+      "activity": "Send the recruitment pipeline summary and key hiring insights to stakeholders.",
+      "start": "2026-10-19",
+      "end": "2026-10-19",
+      "status": "Approved",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Mon 19 Oct",
+      "percent": 100,
+      "employee": "Ada Okafor",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 7,
+      "title": "Complete the payroll reconciliation",
+      "activity": "Reconcile October payroll variances and share the signed reconciliation with finance.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "Awaiting approval",
+      "percent": 100,
+      "employee": "Chidi Eze",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 8,
+      "title": "Validate client background checks",
+      "activity": "Review verification outcomes and send the final checks to the account manager.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Awaiting approval",
+      "percent": 100,
+      "employee": "Bola Adeyemi",
+      "carry": false,
+      "comments": []
+    },
+    {
+      "id": 9,
+      "title": "Refresh the assessment question bank",
+      "activity": "Review and replace expired assessment questions for the next hiring round.",
+      "start": "2026-10-19",
+      "end": "2026-10-23",
+      "status": "Blocked",
+      "percent": 0,
+      "employee": "Zainab Musa",
+      "reason": "Subject matter expert review is outstanding.",
+      "carry": true,
+      "comments": []
+    },
+    {
+      "id": 10,
+      "title": "Submit weekly recruitment metrics",
+      "activity": "Compile team pipeline numbers, interview ratios, and hiring turnaround time.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Awaiting approval",
+      "percent": 100,
+      "employee": "Zainab Musa",
+      "carry": false,
+      "note": "All assessment and interview metrics consolidated.",
+      "comments": []
+    },
+    {
+      "id": 11,
+      "title": "Compile talent sourcing pipeline review",
+      "activity": "Analyse active candidate sources and conversion efficiency for October.",
+      "start": "2026-10-19",
+      "end": "2026-10-23",
+      "status": "Awaiting approval",
+      "percent": 100,
+      "employee": "Damilola James",
+      "carry": false,
+      "note": "Ready for manager review.",
+      "comments": []
+    },
+    {
+      "id": 12,
+      "title": "Update interview scorecard rubric",
+      "activity": "Revise screening criteria and competency scoring for candidates.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "Declined",
+      "declined": true,
+      "percent": 70,
+      "employee": "Chidi Eze",
+      "reason": "Please include the standard competency indicators before sign-off.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Tunde Bakare",
+          "text": "Please include the standard competency indicators before sign-off.",
+          "time": "Mon 19 Oct, 11:30"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Draft client search agreement for Q4",
+      "activity": "Prepare commercial terms and staffing commitments for Q4 accounts.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Declined",
+      "declined": true,
+      "percent": 50,
+      "employee": "Ada Okafor",
+      "reason": "Commercial fee breakdown must be approved by the director first.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Tunde Bakare",
+          "text": "Commercial fee breakdown must be approved by the director first.",
+          "time": "Mon 19 Oct, 09:15"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Review contractor rate cards",
+      "activity": "Benchmark contractor pay rates against current market averages.",
+      "start": "2026-10-19",
+      "end": "2026-10-20",
+      "status": "Declined",
+      "declined": true,
+      "percent": 65,
+      "employee": "Bola Adeyemi",
+      "reason": "Missing updated vendor tax compliance documents.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Tunde Bakare",
+          "text": "Missing updated vendor tax compliance documents.",
+          "time": "Mon 19 Oct, 14:00"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Conduct background verification for tech hires",
+      "activity": "Process degree authentication and previous employer background checks.",
+      "start": "2026-10-19",
+      "end": "2026-10-23",
+      "status": "Blocked",
+      "percent": 20,
+      "employee": "Chidi Eze",
+      "reason": "Awaiting candidate degree verification transcripts from the university portal.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Chidi Eze",
+          "text": "University portal is experiencing downtime.",
+          "time": "Mon 19 Oct, 08:45"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Finalise Q4 recruitment vendor contracts",
+      "activity": "Complete vendor partner SLA negotiations and renewal agreements.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Blocked",
+      "percent": 40,
+      "employee": "Bola Adeyemi",
+      "reason": "Legal team has not returned the revised SLA terms.",
+      "carry": true,
+      "comments": [
+        {
+          "author": "Bola Adeyemi",
+          "text": "Sent follow up to legal team this morning.",
+          "time": "Mon 19 Oct, 10:10"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Submit client invoice reconciliation",
+      "activity": "Verify billable hours and match timesheet records to invoice schedules.",
+      "start": "2026-10-19",
+      "end": "2026-10-23",
+      "status": "Blocked",
+      "percent": 15,
+      "employee": "Damilola James",
+      "reason": "Finance ERP system maintenance downtime since Tuesday morning.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Damilola James",
+          "text": "ERP support promised resolution by 3pm.",
+          "time": "Mon 19 Oct, 11:20"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Deliver recruitment ops playbook",
+      "activity": "Consolidate standard recruitment operating procedures and intake rubrics.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "Approved",
+      "percent": 100,
+      "employee": "Chidi Eze",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Mon 19 Oct",
+      "comments": []
+    },
+    {
+      "id": 19,
+      "title": "Validate vendor compliance checklist",
+      "activity": "Audit background check certifications and vendor SLA requirements for Q4.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Approved",
+      "percent": 100,
+      "employee": "Bola Adeyemi",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Tue 20 Oct",
+      "comments": []
+    },
+    {
+      "id": 20,
+      "title": "Consolidate graduate trainee test results",
+      "activity": "Score cognitive assessments and compile candidate cohort distribution ranking.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "Approved",
+      "percent": 100,
+      "employee": "Zainab Musa",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Mon 19 Oct",
+      "comments": []
+    },
+    {
+      "id": 21,
+      "title": "Publish October talent market report",
+      "activity": "Prepare executive report on regional compensation benchmarks and sourcing velocities.",
+      "start": "2026-10-19",
+      "end": "2026-10-22",
+      "status": "Approved",
+      "percent": 100,
+      "employee": "Damilola James",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Wed 21 Oct",
+      "comments": []
+    },
+    {
+      "id": 22,
+      "title": "Client staffing SLA sign-off",
+      "activity": "Agree on candidate turnaround commitments and staffing quotas with executive stakeholders.",
+      "start": "2026-10-19",
+      "end": "2026-10-20",
+      "status": "Approved",
+      "percent": 100,
+      "employee": "Ada Okafor",
+      "approvedBy": "Tunde Bakare",
+      "approvedOn": "Tue 20 Oct",
+      "comments": []
+    },
+    {
+      "id": 23,
+      "title": "Revise employer brand presentation deck",
+      "activity": "Update company overview slides and recruitment pitch templates.",
+      "start": "2026-10-19",
+      "end": "2026-10-21",
+      "status": "Declined",
+      "declined": true,
+      "percent": 55,
+      "employee": "Zainab Musa",
+      "reason": "Brand assets must align with the revised Q4 visual design guide.",
+      "carry": false,
+      "comments": [
+        {
+          "author": "Tunde Bakare",
+          "text": "Brand assets must align with the revised Q4 visual design guide.",
+          "time": "Mon 19 Oct, 15:45"
+        }
+      ]
+    }
+  ],
+  "seedPeople": [
+    [
+      "Ada Okafor",
+      "Employee",
+      "Workforce Resourcing",
+      "Recruitment",
+      "Tunde Bakare",
+      "Active"
+    ],
+    [
+      "Chidi Eze",
+      "Employee",
+      "Workforce Resourcing",
+      "Recruitment",
+      "Tunde Bakare",
+      "Active"
+    ],
+    [
+      "Bola Adeyemi",
+      "Employee",
+      "Workforce Resourcing",
+      "Recruitment",
+      "Tunde Bakare",
+      "Active"
+    ],
+    [
+      "Zainab Musa",
+      "Employee",
+      "Workforce Resourcing",
+      "Assessment",
+      "Tunde Bakare",
+      "Active"
+    ],
+    [
+      "Femi Lawson",
+      "Employee",
+      "Workforce Resourcing",
+      "Recruitment",
+      "Tunde Bakare",
+      "On leave"
+    ],
+    [
+      "Tunde Bakare",
+      "Line Manager",
+      "Workforce Resourcing",
+      "Recruitment",
+      "—",
+      "Active"
+    ],
+    [
+      "Nneka Obi",
+      "Line Manager",
+      "Outsourcing",
+      "Payroll",
+      "—",
+      "Active"
+    ],
+    [
+      "Amara Bello",
+      "Business Director",
+      "Workforce Resourcing",
+      "—",
+      "—",
+      "Active"
+    ]
+  ],
+  "pendingNames": [
+    "Damilola James",
+    "Tosin Ajayi",
+    "Ibrahim Yusuf",
+    "Evelyn Peters",
+    "Samuel Ojo",
+    "Ruth Akande",
+    "Daniel Uche",
+    "Mary Afolabi",
+    "Victor Bello",
+    "Grace Ekanem",
+    "Amina Lawal",
+    "Paul Nwachukwu",
+    "Joy Ibekwe",
+    "Peter Balogun",
+    "Hauwa Ali",
+    "Emmanuel John"
+  ],
+  "defaultPastLeaves": [
+    {
+      "id": "past-tb-1",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2026-09-14",
+      "end": "2026-09-21",
+      "days": 8,
+      "resumptionDate": "2026-09-22",
+      "returnedOn": "2026-09-22",
+      "relief": {
+        "name": "Emeka Nwosu",
+        "start": "2026-09-14",
+        "end": "2026-09-21"
+      },
+      "status": "Completed",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-tb-2",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2026-08-03",
+      "end": "2026-08-14",
+      "days": 12,
+      "resumptionDate": "2026-08-15",
+      "returnedOn": "2026-08-15",
+      "relief": {
+        "name": "Nneka Obi",
+        "start": "2026-08-03",
+        "end": "2026-08-14"
+      },
+      "status": "Approved",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-tb-3",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2026-06-15",
+      "end": "2026-06-19",
+      "days": 5,
+      "resumptionDate": "2026-06-22",
+      "returnedOn": "2026-06-22",
+      "relief": {
+        "name": "Emeka Nwosu",
+        "start": "2026-06-15",
+        "end": "2026-06-19"
+      },
+      "status": "Completed",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-tb-4",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2026-04-06",
+      "end": "2026-04-20",
+      "days": 15,
+      "resumptionDate": "2026-04-21",
+      "returnedOn": "2026-04-21",
+      "relief": {
+        "name": "Bayo Adeleke",
+        "start": "2026-04-06",
+        "end": "2026-04-20"
+      },
+      "status": "Approved",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-tb-5",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2026-02-09",
+      "end": "2026-02-13",
+      "days": 5,
+      "resumptionDate": "2026-02-16",
+      "returnedOn": "2026-02-16",
+      "relief": {
+        "name": "Nneka Obi",
+        "start": "2026-02-09",
+        "end": "2026-02-13"
+      },
+      "status": "Completed",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-tb-6",
+      "name": "Tunde Bakare",
+      "role": "Line Manager",
+      "business": "Workforce Resourcing",
+      "manager": "—",
+      "start": "2025-12-15",
+      "end": "2025-12-29",
+      "days": 15,
+      "resumptionDate": "2025-12-30",
+      "returnedOn": "2025-12-30",
+      "relief": {
+        "name": "Emeka Nwosu",
+        "start": "2025-12-15",
+        "end": "2025-12-29"
+      },
+      "status": "Completed",
+      "outcome": "Returned as scheduled"
+    },
+    {
+      "id": "past-ada",
+      "name": "Ada Okafor",
+      "role": "Employee",
+      "business": "Workforce Resourcing",
+      "manager": "Tunde Bakare",
+      "start": "2026-09-28",
+      "end": "2026-10-05",
+      "days": 8,
+      "resumptionDate": "2026-10-06",
+      "returnedOn": "2026-10-05",
+      "relief": null,
+      "status": "Completed",
+      "outcome": "Returned as scheduled"
+    }
+  ],
+  "orgStructure": [
+    {
+      "name": "Workforce Resourcing",
+      "director": "Amara Bello",
+      "units": [
+        "Recruitment",
+        "Assessment"
+      ]
+    },
+    {
+      "name": "Outsourcing",
+      "director": "Emeka Nwosu",
+      "units": [
+        "Background Check",
+        "CSP",
+        "Payroll"
+      ]
+    }
+  ]
+}

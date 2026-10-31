@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
 
 /*
   Design tokens from docs/workforce-prototype-updated.html
@@ -61,6 +61,11 @@
   --color-teal: #0f766e;
   --color-amber: #92400e;
   --color-red: #b91c1c;
+  --color-control-border: #d1d5db;
+  --color-declined-fg: #c2410c;
+  --color-declined-bg: #fff7ed;
+  --color-hold-fg: #5b21b6;
+  --color-hold-bg: #f5f3ff;
 
   /* Neutrals (text / surfaces) */
   --color-gray-400: #9ca3af;
@@ -78,6 +83,7 @@
   --color-blue-tint: #dcebf7;
   --color-blue-soft: #e8f1f9;
   --color-blue-wash: #e7f1f9;
+  --color-login-art: #edf4fb;
 
   /* Status surfaces */
   --color-success-bg: #dcfce7;
@@ -113,7 +119,7 @@
   --color-avatar-lilac-bg: #eee9f8;
   --color-avatar-lilac-fg: #7653a3;
   --color-avatar-sand-bg: #f5eddf;
-  --color-avatar-sand-fg: #906d3e;
+  --color-avatar-sand-fg: #7f5f34; /* contrast correction on the prototype sand surface */
 
   /* Prototype chrome */
   --color-proto-bg: #121e2b;

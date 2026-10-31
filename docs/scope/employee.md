@@ -4,10 +4,18 @@ Recommended first user group. Finish this epic (plus shared profile and notifica
 
 ## Employee
 
-### 9. Employee home and weekly board · needs a decision
+### 9. Employee home and weekly board · in-progress
 Employee Home: week context, metrics, and the weekly task board or list for the open week, respecting tracker lock state from HR.
 **Done when:** a signed in Employee sees this week's tasks from the DB, empty and locked states render clearly, and week navigation matches the prototype intent.
-- [ ] Design it (spec): `/architect employee home and weekly board`
+- [x] Design it (spec): `/architect employee home and weekly board`
+- [ ] Build it: `/develop employee home and weekly board`
+  - [ ] Confirm the built shared shell and authentication prerequisites, and obtain approved visual prototype references (AC-1, AC-5, AC-8, AC-9).
+  - [ ] Compose the final prototype List and Card views, date controls, attention section, read only drawer, and approved states (AC-1 through AC-6, AC-8).
+  - [ ] Implement the two guarded read endpoints, calendar and lock projections, ownership checks, and pagination on the existing database model (AC-2 through AC-5, AC-7, AC-8).
+  - [ ] Connect live data with cancellation, boundary refresh, stale states, and session handling (AC-2 through AC-8).
+- [ ] Verify it: `/check verify employee home and weekly board`
+
+spec [0008](../specs/0008-employee-home-weekly-board.md) · code pending · prerequisites: built Features 4 and 6, plus approved visual prototype inspection. The accepted design follows the final List and Card screen without the superseded board or metric cards. Task changes remain in Feature 10.
 
 ### 10. Employee task lifecycle · needs a decision
 Create and edit tasks, update progress, mark complete for approval, carry tasks, cancel or hold where the prototype allows, with comments.

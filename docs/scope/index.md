@@ -4,7 +4,7 @@ Internal weekly performance tracker for Workforce Group. People plan and report 
 
 Five roles from the HTML prototype: Employee, Line Manager, Business Director, Executive, HR / Admin. First release covers all five role happy paths, in app and email alerts, and the shared journeys between them.
 
-**Build approach:** Facade (UI first, wired to a locally migrated database with seed mock rows so UI, API, and backend already work on live local data; harden from there).
+**Build approach:** Facade (UI first, wired to a migrated Neon database with seed mock rows so UI, API, and backend already work on live data; harden from there).
 **Role order:** Journey one user group to completion before the next. Recommended default: Employee → Line Manager → Business Director → Executive → HR / Admin. If a run does not name the role, ask before building.
 **Workflow:** Alpha (after `/develop`, run `/check verify` on the real app). Project default. `/architect` still applies when a feature needs a decision. Tag a feature `· Beta` or `· GA` only when it needs more rigor than Alpha.
 **Build rhythm:** one feature per run; verify before calling done; on a new chat, read last commit and unstaged files plus this scope to resume. Handoff for juniors and AI IDEs: root `README.md` and `AGENTS.md` (prototype UI is the design contract; ask before inventing missing screens).
@@ -19,15 +19,15 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 |---|---------|-------|--------|
 | A | App scaffold | Existing | existing |
 | B | Design token notes | Existing | existing |
-| 1 | Coding standards and tooling | Foundation | planned |
-| 2 | Stack and architecture | Foundation | in-progress |
-| 3 | Data model | Foundation | planned |
-| 4 | Design system and UI foundation | Foundation | planned |
-| 5 | Seeded local DB and API skeleton | Foundation | planned |
-| 6 | Sign in and role access | Foundation | planned |
-| 7 | Accessibility baseline | Foundation | planned |
-| 8 | Error monitoring and product analytics | Foundation | planned |
-| 9 | Employee home and weekly board | Employee | planned |
+| 1 | Coding standards and tooling | Foundation | done |
+| 2 | Stack and architecture | Foundation | done |
+| 3 | Data model | Foundation | done |
+| 4 | Design system and UI foundation | Foundation | in-progress |
+| 5 | Seeded local DB and API skeleton | Foundation | done |
+| 6 | Sign in and role access | Foundation | in-progress |
+| 7 | Accessibility baseline | Foundation | in-progress |
+| 8 | Error monitoring and product analytics | Foundation | in-progress |
+| 9 | Employee home and weekly board | Employee | in-progress |
 | 10 | Employee task lifecycle | Employee | planned |
 | 11 | Employee history | Employee | planned |
 | 12 | Employee leave | Employee | planned |
@@ -61,8 +61,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 | Epic | File | Status rollup |
 |------|------|---------------|
-| Foundations | [foundations.md](./foundations.md) | scaffold existing; 1 planned standards; 2 in progress; 3 to 8 planned |
-| Employee | [employee.md](./employee.md) | 9 to 12 planned |
+| Foundations | [foundations.md](./foundations.md) | 1 to 3 and 5 done; 4 built with verification open; 6 to 8 designs confirmed, builds next |
+| Employee | [employee.md](./employee.md) | 9 design confirmed, build awaits shared shell and auth; 10 to 12 planned |
 | Shared (all roles) | [shared.md](./shared.md) | 13 to 15 planned |
 | Line Manager | [line-manager.md](./line-manager.md) | 16 to 20 planned |
 | Business Director | [business-director.md](./business-director.md) | 21 to 24 planned |
@@ -77,6 +77,11 @@ Out of scope for the current build pass, kept so the plan stays honest.
 - **Billing:** none.
 - **Push or SMS alerts:** in app and email only for this release.
 - **Extra languages:** English only.
+- **Local database CLI guards (from spec 0004):** harden the existing seed and `db:verify` hostname checks against connection query host overrides. Feature 5 uses the stricter local connection rule before invoking those tools; broader CLI guard changes are deferred.
+- **Password recovery (from spec 0005):** complete reset and email delivery flow is deferred; Feature 6 keeps Forgot password visibly disabled.
+- **Hosted auth proxy configuration (from spec 0005):** select and verify the hosting specific trusted proxy boundary before trusting forwarded client IP headers. Until then limits use the direct socket IP.
+- **Broader accessibility test matrix (from spec 0006):** Firefox, WebKit/real Safari, mobile screen readers and other assistive technology combinations remain outside the initial Chromium automation plus Windows NVDA/Chrome or Edge baseline; extend coverage through an explicit later decision.
+- **Hosted telemetry and stronger delivery (from spec 0007):** monitoring/analytics providers, operational alerts, source map upload and durable outbox delivery remain future decisions. Feature 8 starts with local files and best effort delivery.
 
 ## Legend
 

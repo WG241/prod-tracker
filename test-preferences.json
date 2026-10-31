@@ -1,0 +1,10 @@
+{
+  "tool": "node:test",
+  "runtime": "tsx",
+  "testDir": "tests",
+  "filePattern": "*.test.ts",
+  "e2eTool": "none",
+  "browserVerification": "cua_repl on the real development and production app",
+  "database": "explicit separate local TEST_DATABASE_URL",
+  "source": "Approved spec 0005"
+}

@@ -1,0 +1,157 @@
+import { APIError } from 'better-auth'
+import type { PrismaClient } from '../../src/generated/prisma/client.ts'
+import type { AuthProvider } from './provider.ts'
+import { safeContext, staffContext } from './context.ts'
+import { AuthFailure } from './errors.ts'
+
+export function providerHeaders(incoming: { cookie?: string; origin?: string; 'user-agent'?: string }) {
+  const headers = new Headers()
+  for (const name of ['cookie', 'origin', 'user-agent'] as const) {
+    if (incoming[name]) headers.set(name, incoming[name])
+  }
+  return headers
+}
+
+function isSessionCookieName(name: string) {
+  // Better Auth adds the __Secure- prefix when useSecureCookies is enabled.
+  return name === 'workforce.session_token' || name === '__Secure-workforce.session_token'
+}
+
+function tokenFromPair(pair: string) {
+  const eq = pair.indexOf('=')
+  if (eq === -1) return null
+  const name = pair.slice(0, eq).trim()
+  if (!isSessionCookieName(name)) return null
+  return decodeURIComponent(pair.slice(eq + 1).trim())
+}
+
+function sessionTokenFrom(headers: Headers) {
+  const raw = headers.get('cookie')
+  if (!raw) return null
+  for (const segment of raw.split(';')) {
+    const token = tokenFromPair(segment)
+    if (token) return token
+  }
+  return null
+}
+
+function sessionTokenFromSetCookie(headers: Headers) {
+  for (const cookie of headers.getSetCookie()) {
+    const token = tokenFromPair(cookie.split(';', 1)[0] ?? '')
+    if (token) return token
+  }
+  return null
+}
+
+export function createAuthService(db: PrismaClient, auth: AuthProvider) {
+  async function audit(action: string, session: { id: string; userId: string }) {
+    await db.auditEvent.create({ data: { actorId: session.userId, action, targetType: 'AuthSession', targetId: session.id } })
+  }
+  async function outcome(action: string, session: { id: string; userId: string }) {
+    try { await audit(action, session) }
+    catch { console.error('auth_outcome_audit_failed') }
+  }
+  async function revoke(session: { id: string; userId: string }, all: boolean, headers: Headers) {
+    await audit('auth.revocation.requested', session)
+    await db.authSession.deleteMany({ where: all ? { userId: session.userId } : { id: session.id } })
+    // Match signOut(): do not claim revocation or forward clearing cookies until the
+    // targeted rows are confirmed gone. Better Auth can catch deletion failures.
+    const remaining = await db.authSession.count({
+      where: all ? { userId: session.userId } : { id: session.id },
+    })
+    if (remaining > 0) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
+    const result = await auth.api.signOut({ headers, returnHeaders: true })
+    await outcome('auth.revocation.completed', session)
+    return result.headers
+  }
+  async function current(headers: Headers) {
+    // Resolve eligibility from the persisted session before getSession so daily
+    // renewal cannot extend an ineligible session that we are about to revoke.
+    const token = sessionTokenFrom(headers)
+    if (token) {
+      const existing = await db.authSession.findUnique({
+        where: { token },
+        select: { id: true, userId: true, expiresAt: true },
+      })
+      if (existing && existing.expiresAt > new Date()) {
+        const staff = await staffContext(db, existing.userId)
+        if (!staff) {
+          const person = await db.user.findUnique({ where: { id: existing.userId }, select: { accountStatus: true } })
+          return { context: null, headers: await revoke(existing, person?.accountStatus === 'INACTIVE', headers) }
+        }
+      }
+    }
+    const result = await auth.api.getSession({ headers, returnHeaders: true })
+    if (!result.response) return { context: null, headers: result.headers }
+    const session = result.response.session
+    const staff = await staffContext(db, session.userId)
+    if (!staff) {
+      const person = await db.user.findUnique({ where: { id: session.userId }, select: { accountStatus: true } })
+      const expired = await revoke(session, person?.accountStatus === 'INACTIVE', headers)
+      return { context: null, headers: expired }
+    }
+    return { context: safeContext(staff, session.expiresAt), headers: result.headers }
+  }
+  async function signIn(email: string, password: string, headers: Headers, emailKey?: string) {
+    let result
+    try { result = await auth.api.signInEmail({ body: { email, password }, headers, returnHeaders: true }) }
+    catch (error) {
+      if (error instanceof APIError && error.body?.code === 'INVALID_EMAIL_OR_PASSWORD') throw new AuthFailure('INVALID_CREDENTIALS', 401)
+      if (error instanceof APIError && error.body?.code === 'INVALID_EMAIL') throw new AuthFailure('INVALID_INPUT', 400)
+      if (error instanceof APIError && error.body?.code === 'ACCOUNT_UNAVAILABLE') throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
+      throw error
+    }
+    // Prefer the documented response token, then Set-Cookie, then newest user session.
+    const tokenCandidates = [
+      typeof result.response.token === 'string' ? result.response.token : null,
+      sessionTokenFromSetCookie(result.headers),
+    ]
+    let session = null
+    for (const token of tokenCandidates) {
+      if (!token) continue
+      session = await db.authSession.findUnique({ where: { token } })
+      if (session) break
+    }
+    if (!session && typeof result.response.user?.id === 'string') {
+      session = await db.authSession.findFirst({
+        where: { userId: result.response.user.id },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
+    if (!session) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
+    try {
+      const staff = await staffContext(db, session.userId)
+      if (!staff) throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
+      const context = safeContext(staff, session.expiresAt)
+      await db.$transaction(async (tx) => {
+        if (emailKey) await tx.loginThrottle.deleteMany({ where: { key: emailKey } })
+        await tx.auditEvent.create({ data: { actorId: session.userId, action: 'auth.signin.completed', targetType: 'AuthSession', targetId: session.id } })
+      }, { maxWait: 5000, timeout: 5000 })
+      return { context, headers: result.headers }
+    } catch (error) {
+      // Cookies have not been issued. Retain requested evidence if cleanup fails.
+      try {
+        await audit('auth.revocation.requested', session)
+        await db.authSession.deleteMany({ where: { id: session.id } })
+        await outcome('auth.revocation.completed', session)
+      } catch { console.error('auth_unissued_session_cleanup_failed') }
+      throw error
+    }
+  }
+  async function signOut(headers: Headers) {
+    const result = await auth.api.getSession({ headers, returnHeaders: true })
+    const session = result.response?.session
+    if (session) await audit('auth.signout.requested', session)
+    const signedOut = await auth.api.signOut({ headers, returnHeaders: true })
+    // Better Auth intentionally catches deletion errors. Its response alone does
+    // not establish revocation, so do not issue expiry cookies until checked.
+    if (session && await db.authSession.findUnique({ where: { id: session.id }, select: { id: true } })) {
+      throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
+    }
+    if (session) await outcome('auth.signout.completed', session)
+    return signedOut.headers
+  }
+  return { current, signIn, signOut }
+}
+
+export type AuthService = ReturnType<typeof createAuthService>

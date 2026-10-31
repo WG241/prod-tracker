@@ -1,18 +1,11 @@
-import { Database, Rocket } from 'lucide-react'
+import { lazy, Suspense } from 'react'
+import { AuthApp } from './features/auth/AuthApp.tsx'
+
+const DevelopmentApp = import.meta.env.DEV ? lazy(() => import('./dev/DevelopmentApp.tsx')) : null
 
 function App() {
-  return (
-    <main className="min-h-svh flex flex-col items-center justify-center gap-4 bg-zinc-50 text-zinc-900 p-6">
-      <div className="flex items-center gap-3">
-        <Rocket className="size-8 text-sky-600" />
-        <h1 className="text-3xl font-semibold tracking-tight">prod-tracker</h1>
-      </div>
-      <p className="text-zinc-600 flex items-center gap-2">
-        <Database className="size-4" />
-        React + Vite · Tailwind v4 · Lucide · Neon + Prisma
-      </p>
-    </main>
-  )
+  if (DevelopmentApp && ['/__ui', '/__data-proof'].includes(window.location.pathname)) return <Suspense fallback={<p role="status" className="workspace-loading">Loading preview…</p>}><DevelopmentApp /></Suspense>
+  return <AuthApp />
 }
 
 export default App
