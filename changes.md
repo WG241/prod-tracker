@@ -178,3 +178,25 @@ A full reset and email flow is still deferred. The earlier always-visible disabl
 **Files edited**
 - `src/features/auth/SignIn.tsx`
 - `src/features/auth/auth.css`
+
+## 11. Relaxed password policy for sign-in and provisioning
+
+**What changed**  
+Passwords now need 6 through 128 characters, with at least one uppercase letter and one number (was 15–128 with no composition rules). Updated shared validation, Better Auth length bounds, sign-in and provision error copy, Feature 6 acceptance criteria, and auth tests.
+
+**Why**  
+The previous 15-character passphrase rule was heavier than needed for this internal tracker. A shorter password with simple uppercase and digit checks is enough for local fixtures and early staff provisioning.
+
+**Files edited**
+- `src/features/auth/contracts.ts`
+- `src/features/auth/SignIn.tsx`
+- `server/auth/provider.ts`
+- `server/auth/provision.ts`
+- `tests/auth/validation.test.ts`
+- `tests/auth/integration.test.ts`
+- `docs/specs/0005-sign-in-role-access/index.md`
+- `docs/specs/0005-sign-in-role-access/rationale.md`
+- `docs/specs/0005-sign-in-role-access/verify.md`
+- `docs/auth-operations.md`
+- `README.md`
+- `.env.example`

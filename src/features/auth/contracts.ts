@@ -26,8 +26,9 @@ export function routeContext(role: AuthRole) {
 }
 
 export function validPassword(value: unknown): value is string {
-  return typeof value === 'string' && !value.includes('\0') && wellFormed(value)
-    && [...value].length >= 15 && [...value].length <= 128
+  if (typeof value !== 'string' || value.includes('\0') || !wellFormed(value)) return false
+  const length = [...value].length
+  return length >= 6 && length <= 128 && /[A-Z]/.test(value) && /[0-9]/.test(value)
 }
 
 export function wellFormed(value: string) {

@@ -26,7 +26,7 @@ The user selected Better Auth, separate authentication tables with an explicit o
 
 HR managed provisioning has no public signup. The operator command is a separate process with private credential creation capability; the HTTP configuration stays closed. A pending timestamp separates initial credential creation from audited activation. The library remains responsible for the password hash format and verification (basis: installed general, security, and email/password skills, plus official server API).
 
-The user approved 15 through 128 character passphrases, no composition rules, five failed email attempts per 15 minutes plus an IP limit, PostgreSQL counters, and no password recovery yet. The exact code point/UTF-16 boundary is made explicit so the application and library do not disagree about valid supplementary characters.
+The user approved 6 through 128 character passwords with required uppercase Latin letters and digits, five failed email attempts per 15 minutes plus an IP limit, PostgreSQL counters, and no password recovery yet. The exact code point/UTF-16 boundary is made explicit so the application and library do not disagree about valid supplementary characters.
 
 Role prefixes and a session context only public surface were chosen over adding a demonstration task API. Policy tests use real seeded relationships while preserving the later role features' ownership. A fresh role lookup adds database cost but reflects the selected immediate deactivation and role behavior.
 

@@ -158,7 +158,7 @@ test('identity inconsistencies deny sessions and account details require correct
     await db.authUser.update({ where: { id: identity.id }, data: { provisionedAt: null } })
     assert.equal((await request('/api/session', { headers: { Cookie: signedIn.cookie } })).status, 401)
     const attempt = async (pass: string) => request('/api/auth/sign-in', { method: 'POST', headers: { Origin: config.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: identity.email, password: pass }) })
-    assert.equal((await attempt('incorrect password with enough length')).status, 401)
+    assert.equal((await attempt('WrongPass1')).status, 401)
     assert.equal((await attempt(password!)).status, 403)
     await db.authUser.update({ where: { id: identity.id }, data: { provisionedAt: identity.provisionedAt } })
     const fresh = await login()
@@ -275,7 +275,7 @@ test('policies enforce own, current, historical, business, Executive, HR and nar
 test('reprovisioning preserves ready credentials, activation time and sessions (AC-1,7)', async () => {
   await login()
   const identity = await db.authUser.findUniqueOrThrow({ where: { id: roles[0][0] }, include: { accounts: true, sessions: true } })
-  assert.equal(await provision(db, config, identity.id, 'different valid password for idempotence'), 'already provisioned')
+  assert.equal(await provision(db, config, identity.id, 'DifferentPass1'), 'already provisioned')
   assert.deepEqual(await db.authUser.findUniqueOrThrow({ where: { id: identity.id }, include: { accounts: true, sessions: true } }), identity)
 })
 
@@ -289,12 +289,14 @@ async function createTestPerson() {
   return id
 }
 
-test('the real provider accepts supplementary characters and spaces at password boundaries (AC-8)', async () => {
-  for (const exact of ['😀'.repeat(128), ' '.repeat(15)]) {
+test('the real provider accepts composed passwords at length boundaries (AC-8)', async () => {
+  for (const exact of ['Abcd12', 'A1' + 'x'.repeat(126)]) {
     const id = await createTestPerson()
     assert.equal(await provision(db, config, id, exact), 'provisioned')
     assert.equal((await login(id, exact)).body.user.id, id)
   }
+  await assert.rejects(provision(db, config, await createTestPerson(), 'abcdef'), /uppercase letter and a number/)
+  await assert.rejects(provision(db, config, await createTestPerson(), 'Abcd1'), /uppercase letter and a number/)
 })
 
 test('failed activation stays pending and requires password verified resume (AC-7)', async () => {
@@ -312,7 +314,7 @@ test('failed activation stays pending and requires password verified resume (AC-
   assert.equal((await db.authUser.findUniqueOrThrow({ where: { id } })).provisionedAt, null)
   assert.equal(await db.authAccount.count({ where: { userId: id } }), 1)
   assert.equal(await staffContext(db, id), null)
-  await assert.rejects(provision(db, config, id, 'wrong original password long enough', { resume: true }), /verification failed/)
+  await assert.rejects(provision(db, config, id, 'WrongOriginal1', { resume: true }), /verification failed/)
   assert.equal(await provision(db, config, id, password!, { resume: true }), 'provisioned')
   assert.ok((await db.authUser.findUniqueOrThrow({ where: { id } })).provisionedAt)
   assert.equal(await db.auditEvent.count({ where: { targetId: id, action: 'auth.credential.provisioned' } }), 1)

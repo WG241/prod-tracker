@@ -15,7 +15,7 @@ export function createAuth(db: PrismaClient, config: AuthConfig) {
     account: { modelName: 'authAccount', accountLinking: { enabled: false } },
     verification: { modelName: 'authVerification' },
     session: { modelName: 'authSession', expiresIn: 604800, updateAge: 86400, cookieCache: { enabled: false } },
-    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 15, maxPasswordLength: 256 },
+    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 6, maxPasswordLength: 256 },
     advanced: {
       cookiePrefix: 'workforce',
       useSecureCookies: config.secure,

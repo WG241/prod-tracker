@@ -36,7 +36,7 @@ npm run dev
 
 Keep all database credentials outside browser code. `BETTER_AUTH_URL` stays on loopback while you preview on this machine. Use Node 24 and npm 11 (`.node-version`).
 
-After `db:seed` and `auth:seed`, open http://127.0.0.1:5173/sign-in. All five accounts share the password from `LOCAL_AUTH_TEST_PASSWORD` in `.env` (15–128 characters; never commit a real staff password).
+After `db:seed` and `auth:seed`, open http://127.0.0.1:5173/sign-in. All five accounts share the password from `LOCAL_AUTH_TEST_PASSWORD` in `.env` (6–128 characters with an uppercase letter and a number; never commit a real staff password).
 
 | Role | Email | Password |
 |------|--------|----------|

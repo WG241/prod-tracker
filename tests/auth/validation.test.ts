@@ -15,9 +15,20 @@ import {
 import { EMAIL_FAILURE_LIMIT, throttleKey } from '../../server/auth/throttle.ts'
 
 // AC-5, AC-8: boundary values, fixed routes and secure configuration.
-test('password policy counts Unicode characters and preserves spaces', () => {
-  for (const value of ['x'.repeat(15), 'x'.repeat(128), '😀'.repeat(15), '😀'.repeat(128), ' '.repeat(15)]) assert.equal(validPassword(value), true)
-  for (const value of ['x'.repeat(14), 'x'.repeat(129), '😀'.repeat(129), 'a'.repeat(15) + '\0', 'a'.repeat(15) + '\uD800', null, []]) assert.equal(validPassword(value), false)
+test('password policy requires length, uppercase and a number', () => {
+  for (const value of ['Abcde1', 'A1' + 'x'.repeat(126), 'Passw0rd', 'X9abcd']) assert.equal(validPassword(value), true)
+  for (const value of [
+    'Abcd1',
+    'abcdef',
+    'ABCDEF',
+    'Abcdef',
+    'abcdef1',
+    'A1' + 'x'.repeat(127),
+    'Abcde1\0',
+    'Abcde1\uD800',
+    null,
+    [],
+  ]) assert.equal(validPassword(value), false)
 })
 test('auth configuration permits only fixed origins and rejects placeholders', () => {
   const secret = randomBytes(48).toString('base64url')
@@ -32,8 +43,21 @@ test('database target checks reject query host overrides regardless of case', ()
 test('test database validation cannot mistake host or port aliases for separate databases', () => {
   const testUrl = 'postgresql://user@127.0.0.1:5432/prod_tracker_auth_test'
   assert.equal(authTestDatabase(testUrl, 'postgresql://user@localhost/prod_tracker'), testUrl)
-  for (const ordinary of ['postgresql://user@localhost/prod_tracker_auth_test', 'postgresql://user@[::1]:5432/prod_tracker_auth_test', 'postgresql://user@127.1:5432/prod%5Ftracker_auth_test']) assert.throws(() => authTestDatabase(testUrl, ordinary), /separate local/)
-  assert.throws(() => authTestDatabase('postgresql://user@remote/prod_tracker_auth_test', 'postgresql://user@localhost/prod_tracker'))
+  for (const ordinary of [
+    'postgresql://user@localhost/prod_tracker_auth_test',
+    'postgresql://user@[::1]:5432/prod_tracker_auth_test',
+    'postgresql://user@127.1:5432/prod%5Ftracker_auth_test',
+  ]) assert.throws(() => authTestDatabase(testUrl, ordinary), /separate TEST_DATABASE_URL/)
+  const neonTest = 'postgresql://user@ep-test.neon.tech/neondb?sslmode=require'
+  assert.equal(authTestDatabase(neonTest, 'postgresql://user@ep-dev.neon.tech/neondb?sslmode=require'), neonTest)
+  assert.equal(
+    authTestDatabase('postgresql://user@ep.neon.tech/neondb_auth_test', 'postgresql://user@ep.neon.tech/neondb'),
+    'postgresql://user@ep.neon.tech/neondb_auth_test',
+  )
+  assert.throws(
+    () => authTestDatabase(neonTest, 'postgresql://user@ep-test.neon.tech/neondb?sslmode=require'),
+    /separate TEST_DATABASE_URL/,
+  )
 })
 test('every role has only the approved landing and navigation paths', () => {
   const counts = [3, 5, 4, 3, 7]

@@ -17,9 +17,15 @@ npm run db:deploy
 npm run db:generate
 ```
 
+If a migration file was hardened for idempotent re-runs after it had already been applied, refresh recorded checksums on every database that already has that migration (does not change schema):
+
+```sh
+npm run db:repair-checksums
+```
+
 ## Trusted provisioning
 
-An operator can provision an existing Active Workforce person with a current assignment and canonical email. The command prompts twice for a hidden password in an interactive terminal. Passwords accept 15 through 128 Unicode characters, including spaces. Do not put a staff password in an argument or environment variable.
+An operator can provision an existing Active Workforce person with a current assignment and canonical email. The command prompts twice for a hidden password in an interactive terminal. Passwords accept 6 through 128 Unicode characters and must include an uppercase letter and a number. Do not put a staff password in an argument or environment variable.
 
 ```sh
 npm run auth:provision -- --user-id person-id

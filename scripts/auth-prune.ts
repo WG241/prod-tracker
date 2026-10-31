@@ -7,7 +7,10 @@ const connection = readConfig().connectionString
 requireOperatorDatabase(connection)
 const db = createDatabase(connection)
 try {
-  const sessions = await db.$executeRaw`DELETE FROM "AuthSession" WHERE "expiresAt"<=clock_timestamp()`
-  const counters = await db.$executeRaw`DELETE FROM "LoginThrottle" WHERE "expiresAt"<=clock_timestamp()`
+  const { sessions, counters } = await db.$transaction(async (tx) => {
+    const sessions = await tx.$executeRaw`DELETE FROM "AuthSession" WHERE "expiresAt"<=clock_timestamp()`
+    const counters = await tx.$executeRaw`DELETE FROM "LoginThrottle" WHERE "expiresAt"<=clock_timestamp()`
+    return { sessions, counters }
+  })
   console.info(`Pruned ${sessions} expired sessions and ${counters} expired counters`)
 } finally { await db.$disconnect() }

@@ -32,7 +32,7 @@ export function SignIn({ notice = '' }: { notice?: string }) {
       setError('Enter your work email.'); setFieldError('email'); emailRef.current?.focus(); return
     }
     if (!validPassword(password)) {
-      setError('Enter a password of 15 through 128 characters.'); setFieldError('password'); passwordRef.current?.focus(); return
+      setError('Enter a password of at least 6 characters with an uppercase letter and a number.'); setFieldError('password'); passwordRef.current?.focus(); return
     }
     inFlight.current = true
     setBusy(true)
@@ -85,7 +85,7 @@ export function SignIn({ notice = '' }: { notice?: string }) {
         <form onSubmit={(event) => void submit(event)} noValidate aria-busy={busy}>
           <InputField ref={emailRef} label="Work email" type="email" name="email" autoComplete="username" required maxLength={254} readOnly={busy} error={fieldError === 'email' ? 'Enter a valid work email.' : undefined} />
           <div className="auth-password">
-            <InputField ref={passwordRef} label="Password" type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" required maxLength={256} readOnly={busy} error={fieldError === 'password' ? 'Use 15 through 128 characters.' : undefined} />
+            <InputField ref={passwordRef} label="Password" type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" required maxLength={256} readOnly={busy} error={fieldError === 'password' ? 'Use at least 6 characters with an uppercase letter and a number.' : undefined} />
             <IconButton label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</IconButton>
           </div>
           <div className="auth-recovery">

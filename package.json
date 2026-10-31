@@ -25,6 +25,7 @@
     "db:verify": "tsx prisma/verify.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:repair-checksums": "tsx scripts/repair-migration-checksums.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "auth:provision": "tsx scripts/auth-provision.ts",

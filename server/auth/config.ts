@@ -8,6 +8,13 @@ export function isLoopback(host: string) {
   return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host.toLowerCase())
 }
 
+/** 127/8 and common loopback names share one identity for test-vs-ordinary DB checks. */
+export function isLoopbackDatabaseHost(host: string) {
+  const value = host.toLowerCase()
+  if (isLoopback(value)) return true
+  return /^127(?:\.\d+){0,3}$/.test(value)
+}
+
 export function checkedDatabaseTarget(value: string) {
   const url = new URL(value)
   if (!['postgresql:', 'postgres:'].includes(url.protocol)
@@ -15,6 +22,19 @@ export function checkedDatabaseTarget(value: string) {
     throw new Error('DATABASE_URL must use an explicit PostgreSQL target')
   }
   return url
+}
+
+function databaseName(url: URL) {
+  return decodeURIComponent(url.pathname.replace(/^\//, ''))
+}
+
+/** Host + port + database name, with loopback aliases collapsed. */
+export function databaseTargetIdentity(url: URL) {
+  const name = databaseName(url)
+  const host = url.hostname.toLowerCase()
+  const port = url.port || '5432'
+  const hostKey = isLoopbackDatabaseHost(host) ? 'loopback' : host
+  return `${hostKey}:${port}:${name}`
 }
 
 export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
@@ -35,11 +55,14 @@ export function authTestDatabase(testValue: string | undefined, ordinaryValue: s
   if (!testValue || !ordinaryValue) throw new Error('TEST_DATABASE_URL and DATABASE_URL must be explicitly configured')
   const test = checkedDatabaseTarget(testValue)
   const ordinary = checkedDatabaseTarget(ordinaryValue)
-  // Reserving a distinct database name also prevents host/port aliases from
-  // making the ordinary database appear to be a separate test target.
-  if (!isLoopback(test.hostname) || test.pathname !== '/prod_tracker_auth_test'
-    || decodeURIComponent(ordinary.pathname) === '/prod_tracker_auth_test') {
-    throw new Error('Tests require a separate local prod_tracker_auth_test database and a different ordinary database name')
+  if (!databaseName(test)) {
+    throw new Error('TEST_DATABASE_URL must include an explicit database name')
+  }
+  // Compare host (loopback aliases collapsed), port, and database name so Neon
+  // branches or a different database name are allowed, while the ordinary
+  // development database stays protected from host/port alias confusion.
+  if (databaseTargetIdentity(test) === databaseTargetIdentity(ordinary)) {
+    throw new Error('Tests require a separate TEST_DATABASE_URL that differs from the ordinary DATABASE_URL by host or database name')
   }
   return testValue
 }

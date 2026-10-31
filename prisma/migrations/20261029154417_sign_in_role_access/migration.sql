@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "AuthUser" (
+CREATE TABLE IF NOT EXISTS "AuthUser" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE "AuthUser" (
 );
 
 -- CreateTable
-CREATE TABLE "AuthAccount" (
+CREATE TABLE IF NOT EXISTS "AuthAccount" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE "AuthAccount" (
 );
 
 -- CreateTable
-CREATE TABLE "AuthSession" (
+CREATE TABLE IF NOT EXISTS "AuthSession" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "token" TEXT NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE "AuthSession" (
 );
 
 -- CreateTable
-CREATE TABLE "AuthVerification" (
+CREATE TABLE IF NOT EXISTS "AuthVerification" (
     "id" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
     "value" TEXT NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE "AuthVerification" (
 );
 
 -- CreateTable
-CREATE TABLE "LoginThrottle" (
+CREATE TABLE IF NOT EXISTS "LoginThrottle" (
     "key" TEXT NOT NULL,
     "count" INTEGER NOT NULL,
     "windowStartedAt" TIMESTAMPTZ(3) NOT NULL,
@@ -69,43 +69,68 @@ CREATE TABLE "LoginThrottle" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AuthUser_email_key" ON "AuthUser"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "AuthUser_email_key" ON "AuthUser"("email");
 
 -- CreateIndex
-CREATE INDEX "AuthAccount_userId_idx" ON "AuthAccount"("userId");
+CREATE INDEX IF NOT EXISTS "AuthAccount_userId_idx" ON "AuthAccount"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AuthAccount_providerId_accountId_key" ON "AuthAccount"("providerId", "accountId");
+CREATE UNIQUE INDEX IF NOT EXISTS "AuthAccount_providerId_accountId_key" ON "AuthAccount"("providerId", "accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AuthSession_token_key" ON "AuthSession"("token");
+CREATE UNIQUE INDEX IF NOT EXISTS "AuthSession_token_key" ON "AuthSession"("token");
 
 -- CreateIndex
-CREATE INDEX "AuthSession_userId_idx" ON "AuthSession"("userId");
+CREATE INDEX IF NOT EXISTS "AuthSession_userId_idx" ON "AuthSession"("userId");
 
 -- CreateIndex
-CREATE INDEX "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt");
+CREATE INDEX IF NOT EXISTS "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt");
 
 -- CreateIndex
-CREATE INDEX "AuthVerification_identifier_idx" ON "AuthVerification"("identifier");
+CREATE INDEX IF NOT EXISTS "AuthVerification_identifier_idx" ON "AuthVerification"("identifier");
 
 -- CreateIndex
-CREATE INDEX "LoginThrottle_expiresAt_idx" ON "LoginThrottle"("expiresAt");
+CREATE INDEX IF NOT EXISTS "LoginThrottle_expiresAt_idx" ON "LoginThrottle"("expiresAt");
 
 -- AddForeignKey
-ALTER TABLE "AuthUser" ADD CONSTRAINT "AuthUser_id_fkey" FOREIGN KEY ("id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "AuthUser" ADD CONSTRAINT "AuthUser_id_fkey" FOREIGN KEY ("id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "AuthAccount" ADD CONSTRAINT "AuthAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AuthUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "AuthAccount" ADD CONSTRAINT "AuthAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AuthUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "AuthSession" ADD CONSTRAINT "AuthSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AuthUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "AuthSession" ADD CONSTRAINT "AuthSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AuthUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Application owned invariants. No existing table or history guard is changed.
-ALTER TABLE "AuthUser" ADD CONSTRAINT "auth_email_canonical"
-  CHECK (email = lower(btrim(email)) AND length(email) > 0);
-ALTER TABLE "AuthUser" ADD CONSTRAINT "auth_name_nonempty" CHECK (length(btrim(name)) > 0);
-ALTER TABLE "AuthAccount" ADD CONSTRAINT "auth_credential_identity"
-  CHECK ("providerId" = 'credential' AND "accountId" = "userId");
-ALTER TABLE "LoginThrottle" ADD CONSTRAINT "auth_throttle_window"
-  CHECK (count >= 0 AND "expiresAt" > "windowStartedAt");
+DO $$ BEGIN
+  ALTER TABLE "AuthUser" ADD CONSTRAINT "auth_email_canonical" CHECK (email = lower(btrim(email)) AND length(email) > 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE "AuthUser" ADD CONSTRAINT "auth_name_nonempty" CHECK (length(btrim(name)) > 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE "AuthAccount" ADD CONSTRAINT "auth_credential_identity" CHECK ("providerId" = 'credential' AND "accountId" = "userId");
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE "LoginThrottle" ADD CONSTRAINT "auth_throttle_window" CHECK (count >= 0 AND "expiresAt" > "windowStartedAt");
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

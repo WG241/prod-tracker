@@ -8,7 +8,7 @@ import { staffContext } from './context.ts'
 import { validPassword } from '../../src/features/auth/contracts.ts'
 
 export async function provision(db: PrismaClient, config: AuthConfig, id: string, password: string, options: { resume?: boolean; repair?: boolean } = {}) {
-  if (!validPassword(password)) throw new Error('Password must contain 15 through 128 Unicode characters')
+  if (!validPassword(password)) throw new Error('Password must be 6 through 128 characters and include an uppercase letter and a number')
   const staff = await staffContext(db, id, false)
   if (!staff || !staff.person.name?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staff.person.email)
     || staff.person.email !== staff.person.email.trim().toLowerCase()) throw new Error('Staff record is not eligible for provisioning')
@@ -35,7 +35,7 @@ export async function provision(db: PrismaClient, config: AuthConfig, id: string
     database: prismaAdapter(db, { provider: 'postgresql', transaction: true }),
     user: { modelName: 'authUser' }, account: { modelName: 'authAccount', accountLinking: { enabled: false } },
     session: { modelName: 'authSession' }, verification: { modelName: 'authVerification' },
-    emailAndPassword: { enabled: true, autoSignIn: false, minPasswordLength: 15, maxPasswordLength: 256 },
+    emailAndPassword: { enabled: true, autoSignIn: false, minPasswordLength: 6, maxPasswordLength: 256 },
     advanced: { database: { generateId: ({ model }) => model === 'authUser' || model === 'user' ? id : randomUUID() } },
     logger: { disabled: true },
     databaseHooks: { user: { create: { before: async (user) => ({ data: { ...user, id, email: staff.person.email, name: staff.person.name!.trim() } }) } } },
