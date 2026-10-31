@@ -66,8 +66,10 @@ deciding? 2 to 4 paragraphs. Do not mention options here, only the problem space
 **Cons**:
 - <drawback or tradeoff>
 
-<!-- Add Option 3 / Option 4 if relevant. Maximum 4 options. Omit section entirely only
-     when documenting a decision already made with no alternatives considered. -->
+<!-- Add Option 3 / Option 4 if relevant. Maximum 4 options.
+     Documentation path (DOCUMENTATION_CONTEXT / already-made decision): include this
+     section only when the engineer mentioned alternatives; omit it entirely when none
+     were mentioned (no invented options, no placeholder sentence). -->
 
 ## Decision
 

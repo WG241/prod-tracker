@@ -186,7 +186,7 @@ Read MODE_FILE_PATH now and follow that mode file as the only mode specific inst
 - Write the spec's `**Status**:` as **`Accepted`**; it documents shipped reality, not a proposal.
 - If SOURCE_FILE_COUNT > 0: read the relevant existing code and document what was built, not what could have been built.
 - If DOCUMENTATION_CONTEXT was provided: use the engineer's stated reasoning for Context, Rationale, and Consequences. Do not invent alternatives they didn't mention.
-- In `## Options considered`: briefly note the alternatives the engineer considered. If none were mentioned, write "Options considered were not documented at decision time."
+- `## Options considered` on this path: if the engineer mentioned alternatives, include the section and note those briefly. If none were mentioned, omit the section entirely (do not invent options and do not pad with a placeholder such as "Options considered were not documented at decision time.").
 - Focus on: what was decided, why, what it enables, what it constrains, what the team now lives with.
 
 **On value sourcing (trace every produced value to a named source, so `/develop` never has to invent one):**

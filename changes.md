@@ -147,3 +147,34 @@ Non-idempotent SQL breaks when someone re-applies or repairs a database. Overrid
 - `AGENTS.md`
 - `docs/specs/0002-data-model/index.md`
 - `prisma/migrations/20261031020959_postgres_security_fk_indexes/migration.sql`
+
+## 9. Aligned sign-in form with the prototype
+
+**What changed**  
+Compared the React `/sign-in` screen to the HTML Sign-in preview in the browser (1440×900, computed styles). Fixed the control border token so inputs and default buttons use the prototype light gray (`#d1d5db`) instead of muted gray. Moved the disabled “Forgot password?” recovery explanation below the Sign in button and styled it like the prototype footer note (centered, 11px).
+
+**Why**  
+The form layout already matched spacing and type, but fields looked heavier than the prototype and the recovery copy sat between Forgot and Sign in, breaking the prototype composition. Spec still requires the recovery explanation; it belongs after the primary button, not between actions.
+
+**Findings (before fixes)**
+- `--color-control-border` was `#6b7280`; prototype inputs/buttons use `#d1d5db`
+- Recovery help sat between Forgot password and Sign in; prototype order is Forgot → Sign in → footer note
+- Left art h1 stays at the 28px hard cap (prototype 40–43px) — intentional per typography scale and Feature 5
+- No prefilled credentials or role picker — intentional per Feature 5 (demo-only in the prototype)
+
+**Files edited**
+- `src/global.css`
+- `src/features/auth/SignIn.tsx`
+- `src/features/auth/auth.css`
+
+## 10. Forgot password shows Coming soon (Feature 6)
+
+**What changed**  
+Removed the standing “Password recovery is not yet available. Contact HR.” note. Enabled “Forgot password?” so a click opens a small dialog titled Coming soon, with copy that password recovery is coming soon in Feature 6, and a Back to sign in action.
+
+**Why**  
+A full reset and email flow is still deferred. The earlier always-visible disabled explanation was heavier than needed; a clickable Coming soon placeholder matches the interim product choice without simulating email or reset.
+
+**Files edited**
+- `src/features/auth/SignIn.tsx`
+- `src/features/auth/auth.css`

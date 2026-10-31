@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { Button, IconButton } from '../../components/ui/Button.tsx'
+import { Dialog } from '../../components/ui/Dialog.tsx'
 import { InputField } from '../../components/ui/Field.tsx'
 import { Avatar } from '../../components/ui/Avatar.tsx'
 import { Badge } from '../../components/ui/Badge.tsx'
@@ -11,6 +12,7 @@ import { useRetryDelay } from './useRetryDelay.ts'
 
 export function SignIn({ notice = '' }: { notice?: string }) {
   const [visible, setVisible] = useState(false)
+  const [recoverySoonOpen, setRecoverySoonOpen] = useState(false)
   const [error, setError] = useState('')
   const [fieldError, setFieldError] = useState<'email' | 'password' | null>(null)
   const [busy, setBusy] = useState(false)
@@ -50,13 +52,27 @@ export function SignIn({ notice = '' }: { notice?: string }) {
     <section className="auth-art" aria-label="Weekly performance">
       <div>
         <span className="wordmark">workforce<span className="brand-dot" /><small>GROUP</small></span>
+      </div>
+      <div className="auth-art-copy">
         <p className="eyebrow">Weekly performance</p>
-        <h2>Meaningful progress.<br />One week at a time.</h2>
+        <h1>Meaningful progress.<br />One week at a time.</h1>
         <p className="auth-art-description">Plan what matters, keep your team connected, and make good work visible.</p>
         <div className="auth-visual" aria-hidden="true">
-          <div className="auth-visual-heading"><h3>Your week, in focus</h3><span>Week 43</span></div>
-          <div className="auth-example"><Avatar name="Ada Okafor" /><div><b>Deliver the Lagos client proposal</b><p>A clear priority. A shared outcome.</p></div></div>
-          <div className="auth-visual-foot"><span>Every step counts.</span><Badge status="In progress" /></div>
+          <div className="auth-visual-heading">
+            <h3>Your week, in focus</h3>
+            <span className="auth-week-pill">Week 43</span>
+          </div>
+          <div className="auth-example">
+            <Avatar name="Ada Okafor" />
+            <div className="auth-example-body">
+              <h3>Deliver the Lagos client proposal</h3>
+              <p>A clear priority. A shared outcome.</p>
+            </div>
+          </div>
+          <div className="auth-visual-foot">
+            <span>Every step counts.</span>
+            <Badge status="In progress" />
+          </div>
         </div>
       </div>
       <p className="auth-art-footer">Workforce Group · Connecting people to possibilities.</p>
@@ -72,12 +88,23 @@ export function SignIn({ notice = '' }: { notice?: string }) {
             <InputField ref={passwordRef} label="Password" type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" required maxLength={256} readOnly={busy} error={fieldError === 'password' ? 'Use 15 through 128 characters.' : undefined} />
             <IconButton label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</IconButton>
           </div>
-          <div className="auth-recovery"><button type="button" disabled aria-describedby="recovery-unavailable">Forgot password?</button></div>
-          <p className="ui-help" id="recovery-unavailable">Password recovery is not yet available. Contact HR.</p>
+          <div className="auth-recovery">
+            <Button type="button" variant="ghost" size="small" onClick={() => setRecoverySoonOpen(true)}>Forgot password?</Button>
+          </div>
           {error && <p className="auth-banner auth-error" role="alert">{error}</p>}
           <Button type="submit" variant="primary" disabled={busy || retry.seconds > 0}>{busy ? 'Signing in…' : retry.seconds ? `Sign in (${retry.seconds}s)` : 'Sign in'}<ArrowRight aria-hidden="true" /></Button>
         </form>
       </div>
+      <Dialog
+        open={recoverySoonOpen}
+        title="Coming soon"
+        size="small"
+        description="Password recovery is coming soon in Feature 6."
+        onClose={() => setRecoverySoonOpen(false)}
+        footer={<Button variant="primary" onClick={() => setRecoverySoonOpen(false)}>Back to sign in</Button>}
+      >
+        {null}
+      </Dialog>
     </section>
   </main>
 }
