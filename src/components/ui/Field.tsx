@@ -41,7 +41,7 @@ export function TextareaField({ label, description, error, id, ...props }: Field
   return <Field label={label} description={description} error={error} id={id}><textarea {...props} /></Field>
 }
 
-export function CheckboxField({ label, description, error, id, ...props }: FieldProps & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+export function CheckboxField({ label, description, error, id, ...props }: FieldProps & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & RefAttributes<HTMLInputElement>) {
   const generatedId = useId()
   const controlId = id ?? generatedId
   return (

@@ -4,11 +4,13 @@ import { Card } from '../../components/ui/Card.tsx'
 import { WorkspaceShell } from '../../components/layout/WorkspaceShell.tsx'
 import { workspaces } from './config.ts'
 import type { WorkspaceRole } from './config.ts'
+import { useAnnouncementReset } from '../../components/accessibility/useAnnounce.ts'
 
 export function Workspace({ role = 'Employee', developmentControls }: { role?: WorkspaceRole; developmentControls?: ReactNode }) {
   const workspace = workspaces[role]
   const [selected, setSelected] = useState(workspace.destinations[0].label)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  useAnnouncementReset(`${role}:${selected}`)
   useLayoutEffect(() => {
     document.title = `${selected} · Workforce`
     headingRef.current?.focus()

@@ -3,8 +3,9 @@
   "runtime": "tsx",
   "testDir": "tests",
   "filePattern": "*.test.ts",
-  "e2eTool": "none",
-  "browserVerification": "cua_repl on the real development and production app",
-  "database": "explicit separate local TEST_DATABASE_URL",
-  "source": "Approved spec 0005"
+  "e2eTool": "playwright-library",
+  "additionalTools": ["@axe-core/playwright"],
+  "browserVerification": "Chromium automation plus actual NVDA and browser zoom on the real app",
+  "database": "Explicit separate TEST_DATABASE_URL for mutating tests; existing fictional credentials for role browser checks",
+  "source": "Approved specs 0005 and 0006"
 }

@@ -1,5 +1,6 @@
 import { roleRoutes, routeContext } from './contracts.ts'
 import type { SessionContext } from './contracts.ts'
+import { reportError } from '../telemetry/client.ts'
 
 export class SessionError extends Error {
   readonly status: number
@@ -24,13 +25,18 @@ function decodeContext(value: unknown): SessionContext {
 }
 
 export async function authRequest(path: '/api/session' | '/api/auth/sign-in' | '/api/auth/sign-out', body?: object, signal?: AbortSignal) {
-  const response = await fetch(path, {
+  let response: Response
+  try { response = await fetch(path, {
     method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000),
-  })
+  }) } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) reportError('API_UNAVAILABLE', error)
+    throw error
+  }
   if (!response.ok) {
+    if (response.status >= 500) reportError('API_UNAVAILABLE')
     const failure: unknown = await response.json().catch(() => null)
     const forbidden = failure && typeof failure === 'object' && 'error' in failure
       && failure.error && typeof failure.error === 'object' && 'code' in failure.error
@@ -42,5 +48,6 @@ export async function authRequest(path: '/api/session' | '/api/auth/sign-in' | '
     const retry = Number(response.headers.get('retry-after'))
     throw new SessionError(response.status, messages[response.status] ?? 'The service is unavailable. Please try again.', Number.isFinite(retry) ? Math.max(0, retry) : 0)
   }
-  return response.status === 204 ? null : decodeContext(await response.json())
+  try { return response.status === 204 ? null : decodeContext(await response.json()) }
+  catch (error) { reportError('API_UNAVAILABLE', error); throw error }
 }

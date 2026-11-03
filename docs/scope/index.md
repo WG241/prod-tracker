@@ -28,9 +28,9 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 7 | Accessibility baseline | Foundation | in-progress |
 | 8 | Error monitoring and product analytics | Foundation | in-progress |
 | 9 | Employee home and weekly board | Employee | in-progress |
-| 10 | Employee task lifecycle | Employee | planned |
-| 11 | Employee history | Employee | planned |
-| 12 | Employee leave | Employee | planned |
+| 10 | Employee task lifecycle | Employee | in-progress |
+| 11 | Employee history | Employee | in-progress |
+| 12 | Employee leave | Employee | in-progress |
 | 13 | Shared profile | Shared | planned |
 | 14 | In app notifications | Shared | planned |
 | 15 | Email alerts | Shared | planned |
@@ -61,8 +61,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 | Epic | File | Status rollup |
 |------|------|---------------|
-| Foundations | [foundations.md](./foundations.md) | 1 to 3 and 5 done; 4 built with verification open; 6 to 8 designs confirmed, builds next |
-| Employee | [employee.md](./employee.md) | 9 design confirmed, build awaits shared shell and auth; 10 to 12 planned |
+| Foundations | [foundations.md](./foundations.md) | 1 to 3 and 5 done; 4 and 7 built with verification open; 6 implemented with checks open; 8 foundation built, real workflow gates open |
+| Employee | [employee.md](./employee.md) | 9 through 12 built with verification open |
 | Shared (all roles) | [shared.md](./shared.md) | 13 to 15 planned |
 | Line Manager | [line-manager.md](./line-manager.md) | 16 to 20 planned |
 | Business Director | [business-director.md](./business-director.md) | 21 to 24 planned |

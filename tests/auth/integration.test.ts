@@ -15,6 +15,9 @@ import { staffContext, safeContext } from '../../server/auth/context.ts'
 import { aggregateScope, canReadPerson, canReadTask, canReviewRelief } from '../../server/auth/policies.ts'
 import { checkEmail, recordFailure, reserve, throttleKey } from '../../server/auth/throttle.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
+import type { EmploymentAssignment } from '../../src/generated/prisma/client.ts'
+import { monday } from '../../server/employee/calendar.ts'
+import { shiftDay } from '../../server/data-model/calendar.ts'
 
 const url = authTestDatabase(process.env.TEST_DATABASE_URL, process.env.DATABASE_URL)
 const db = createDatabase(url)
@@ -32,6 +35,17 @@ let base: string
 const ids = new Set<string>()
 const counterKeys = new Set<string>()
 const testPeople = new Set<string>()
+
+async function changeAssignment(userId: string, data: Pick<EmploymentAssignment, 'role' | 'businessId' | 'unitId' | 'managerId' | 'departmentLabel'>) {
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`
+    const current = await tx.employmentAssignment.findFirstOrThrow({ where: { userId, effectiveTo: null } })
+    const at = new Date()
+    await tx.employmentAssignment.update({ where: { id: current.id }, data: { effectiveTo: at } })
+    const { role, businessId, unitId, managerId, departmentLabel } = data
+    await tx.employmentAssignment.create({ data: { userId, role, businessId, unitId, managerId, departmentLabel, effectiveFrom: at } })
+  })
+}
 
 async function resetLimits() {
   for (const namespace of ['ip', 'auth-ip'] as const) counterKeys.add(throttleKey(config.secret, namespace, '127.0.0.1'))
@@ -137,7 +151,7 @@ test('current role changes take effect immediately and deactivation revokes all 
   const second = await login()
   const assignment = await db.employmentAssignment.findFirstOrThrow({ where: { userId: roles[0][0], effectiveTo: null } })
   try {
-    await db.employmentAssignment.update({ where: { id: assignment.id }, data: { role: 'LINE_MANAGER', managerId: null } })
+    await changeAssignment(assignment.userId, { ...assignment, role: 'LINE_MANAGER', managerId: null })
     const changed = await request('/api/session', { headers: { Cookie: first.cookie } })
     assert.equal((await changed.json() as SessionContext).role, 'LINE_MANAGER')
     const redirect = await request('/employee/home', { headers: { Cookie: first.cookie, Accept: 'text/html' } })
@@ -147,7 +161,7 @@ test('current role changes take effect immediately and deactivation revokes all 
     assert.equal((await request('/api/session', { headers: { Cookie: second.cookie } })).status, 401)
     assert.equal(await db.authSession.count({ where: { userId: roles[0][0] } }), 0)
   } finally {
-    await db.employmentAssignment.update({ where: { id: assignment.id }, data: { role: assignment.role, managerId: assignment.managerId } })
+    await changeAssignment(assignment.userId, assignment)
     await db.user.update({ where: { id: roles[0][0] }, data: { accountStatus: 'ACTIVE', deactivatedAt: null } })
   }
 })
@@ -247,11 +261,16 @@ test('policies enforce own, current, historical, business, Executive, HR and nar
   assert.equal(aggregateScope(employee), false)
   const assignment = await db.employmentAssignment.findFirstOrThrow({ where: { userId: employee.user.id, effectiveTo: null } })
   try {
-    await db.employmentAssignment.update({ where: { id: assignment.id }, data: { managerId: 'person-nneka-obi' } })
+    await changeAssignment(assignment.userId, { ...assignment, managerId: 'person-nneka-obi' })
     assert.equal(await canReadTask(db, manager, current.id, 'current'), false)
     assert.equal(await canReadTask(db, manager, own.id, 'historical'), true)
-  } finally { await db.employmentAssignment.update({ where: { id: assignment.id }, data: { managerId: assignment.managerId } }) }
-  const relief = await db.reliefAssignment.findUniqueOrThrow({ where: { id: 'relief-nneka' }, include: { leave: true } })
+  } finally { await changeAssignment(assignment.userId, assignment) }
+  const original = await db.reliefAssignment.findUniqueOrThrow({ where: { id: 'relief-nneka' } })
+  const startsOn = shiftDay(monday(new Date()), 7), endsOn = shiftDay(startsOn, 7)
+  const relief = await db.$transaction(async (tx) => {
+    const leave = await tx.leaveRecord.create({ data: { userId: original.coveredManagerId, startsOn, expectedReturnOn: endsOn } })
+    return tx.reliefAssignment.create({ data: { leaveId: leave.id, coveredManagerId: original.coveredManagerId, reliefManagerId: manager.user.id, startsOn, endsOn } })
+  })
   const pending = await db.approvalRequest.findFirstOrThrow({ where: { assignedManagerId: manager.user.id, state: 'PENDING' } })
   const during = new Date(relief.startsOn.getTime() + 3600000)
   try {
@@ -263,12 +282,11 @@ test('policies enforce own, current, historical, business, Executive, HR and nar
     await db.reliefAssignment.update({ where: { id: relief.id }, data: { endedAt: during } })
     assert.equal(await canReviewRelief(db, manager, pending.id, during), false)
     await db.reliefAssignment.update({ where: { id: relief.id }, data: { endedAt: relief.endedAt } })
-    await db.leaveRecord.update({ where: { id: relief.leaveId }, data: { cancelledAt: during } })
+    await db.leaveRecord.update({ where: { id: relief.leaveId }, data: { cancelledAt: during, cancelledById: manager.user.id } })
     assert.equal(await canReviewRelief(db, manager, pending.id, during), false)
   } finally {
     await db.approvalRequest.update({ where: { id: pending.id }, data: { assignedManagerId: pending.assignedManagerId } })
     await db.reliefAssignment.update({ where: { id: relief.id }, data: { endedAt: relief.endedAt } })
-    await db.leaveRecord.update({ where: { id: relief.leaveId }, data: { cancelledAt: relief.leave.cancelledAt } })
   }
   assert.equal(await canReviewRelief(db, manager, 'missing-request'), false)
 })
@@ -284,7 +302,7 @@ async function createTestPerson() {
   testPeople.add(id)
   const assignment = await db.employmentAssignment.findFirstOrThrow({ where: { userId: roles[0][0], effectiveTo: null } })
   await db.user.create({ data: { id, name: 'Authentication test fixture', email: `${id}@example.com`, accountStatus: 'ACTIVE', assignments: { create: {
-    role: 'EMPLOYEE', businessId: assignment.businessId, unitId: assignment.unitId, managerId: assignment.managerId, effectiveFrom: new Date(Date.now() - 60000),
+    role: 'EMPLOYEE', businessId: assignment.businessId, unitId: assignment.unitId, managerId: assignment.managerId, effectiveFrom: new Date(),
   } } } })
   return id
 }

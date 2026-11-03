@@ -1,3 +1,5 @@
+import { reportError } from '../features/telemetry/client.ts'
+
 export async function checkConnection() {
   try {
     const response = await fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(10000) })
@@ -7,9 +9,11 @@ export async function checkConnection() {
       && 'database' in result && result.database === 'connected') {
       console.info('Workforce API and database connected')
     } else {
+      if (response.status >= 500) reportError('API_UNAVAILABLE', undefined, 'health')
       console.warn('Workforce API or database unavailable')
     }
   } catch {
+    reportError('API_UNAVAILABLE', undefined, 'health')
     console.warn('Workforce connection check unavailable')
   }
 }

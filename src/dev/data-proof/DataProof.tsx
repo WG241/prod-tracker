@@ -10,6 +10,9 @@ import type { ProofComment, ProofPage, TaskPage } from './api.ts'
 import { forgetPending, recoverPending, rememberPending } from './pending.ts'
 import type { PendingReply } from './pending.ts'
 import './proof.css'
+import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
+import { useAnnouncementReset } from '../../components/accessibility/useAnnounce.ts'
+import { useFormValidation } from '../../components/accessibility/useFormValidation.ts'
 
 const labels: Record<string, string> = { PENDING: 'Pending', IN_PROGRESS: 'In progress', BLOCKED: 'Blocked', AWAITING_APPROVAL: 'Awaiting approval', APPROVED: 'Approved', DECLINED: 'Declined', ON_HOLD: 'On hold', CANCELLED: 'Cancelled' }
 const message = (error: unknown) => error instanceof Error ? error.message : 'The local app could not complete this request.'
@@ -34,12 +37,13 @@ export function DataProof() {
   const [commentPage, setCommentPage] = useState(1)
   const [commentRevision, setCommentRevision] = useState(0)
   const [draft, setDraft] = useState(recovery.pending?.body ?? '')
-  const [fieldError, setFieldError] = useState('')
-  const [fieldAnnouncement, setFieldAnnouncement] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'uncertain' | 'saved' | 'cleanup'>(recovery.pending ? 'uncertain' : 'idle')
   const [saveError, setSaveError] = useState(recovery.pending ? 'Save not confirmed. Retry this reply.' : '')
   const [saved, setSaved] = useState<ProofComment | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
+  const validation = useFormValidation({ fields: [{ name: 'reply', label: 'Reply', ref: composerRef }], validate: () => ({ reply: normalizeProofText(composerRef.current?.value ?? '') === null ? 'Enter 1 to 500 characters. Unsupported text cannot be saved.' : undefined }) })
+  const [saveAttempt, setSaveAttempt] = useState(0)
+  useAnnouncementReset(`proof:${selectedId}`)
   const busyRef = useRef(false)
   const writeController = useRef<AbortController | null>(null)
   const taskKey = `${taskPage}:${taskRevision}`
@@ -82,13 +86,14 @@ export function DataProof() {
   const send = async (tuple: PendingReply) => {
     if (busyRef.current) return
     busyRef.current = true
+    setSaveAttempt((value) => value + 1)
     setSaveState('saving'); setSaveError('')
     const controller = new AbortController()
     writeController.current = controller
     const timeout = window.setTimeout(() => controller.abort(), 12000)
     try {
       const result = await postReply(tuple.taskId, tuple.submissionId, tuple.body, controller.signal)
-      setSaved(result.comment); setDraft(''); setFieldError(''); setFieldAnnouncement('')
+      setSaved(result.comment); setDraft(''); validation.clear()
       if (clearRecovery()) setSaveState('saved')
       setCommentPage(1); setCommentRevision((value) => value + 1)
     } catch (error: unknown) {
@@ -102,14 +107,9 @@ export function DataProof() {
 
   const submit = () => {
     if (busyRef.current || pendingRef.current || !selectedId || storageError) return
+    if (!validation.submit()) return
     const body = normalizeProofText(draft)
-    if (body === null) {
-      const error = 'Enter 1 to 500 characters. Unsupported text cannot be saved.'
-      setFieldError(error)
-      if (document.activeElement === composerRef.current) setFieldAnnouncement(error)
-      else { setFieldAnnouncement(''); composerRef.current?.focus() }
-      return
-    }
+    if (body === null) return
     try {
       const tuple = { taskId: selectedId, submissionId: crypto.randomUUID(), body }
       rememberPending(tuple)
@@ -129,14 +129,14 @@ export function DataProof() {
       <a href="/" className="proof-return"><ArrowLeft aria-hidden="true" />Return to workspace</a>
       <header className="workspace-page-heading"><p className="eyebrow">Local development only</p><h1>Development data proof</h1><p>Fictional actor: {tasks?.actor.name ?? 'Ada Okafor'}</p><p>Sample week: 26–30 October 2026 (Week 44)</p></header>
       <p className="proof-notice">Replies are retained in the local database. An unresolved reply can recover after a reload in this tab. Closing the tab can lose its retry identity.</p>
-      <p className="sr-only" role="status" aria-live="polite">{status}</p>
+      <AnnounceEvent event={status ? { id: saved ? `proof-saved:${saved.id}` : `proof-status:${taskKey}:${commentKey}:${saveState}:${saveAttempt}`, message: status, intent: 'status' } : null} />
       <div className="proof-grid">
         <Card title="Sample tasks" actions={<Button size="small" disabled={taskBusy} onClick={() => setTaskRevision((value) => value + 1)}><RefreshCw aria-hidden="true" />Reload tasks</Button>}>
           <div aria-busy={taskBusy}>
             {taskBusy && <p>Loading sample tasks…</p>}
-            {taskError && <div><p className="ui-error" role="alert">{taskError}</p><Button size="small" onClick={() => setTaskRevision((value) => value + 1)}>Retry task list</Button></div>}
+            {taskError && <div><p className="ui-error">{taskError}</p><AnnounceEvent event={{ id: `tasks-error:${taskKey}`, message: taskError, intent: 'alert' }} /><Button size="small" onClick={() => setTaskRevision((value) => value + 1)}>Retry task list</Button></div>}
             {tasks && tasks.items.length === 0 && <p>No sample tasks are available.</p>}
-            <ul className="proof-tasks">{tasks?.items.map((task) => <li key={task.id}><button type="button" className="proof-task" aria-label={`Select ${task.title}`} aria-pressed={task.id === selectedId} disabled={locked} onClick={() => { if (pendingRef.current) return; setSelectedId(task.id); setCommentPage(1); setDraft(''); setSaved(null); setSaveState('idle'); setSaveError(''); setFieldError(''); setFieldAnnouncement('') }}><strong>{task.title}</strong><p>{task.activity}</p><Badge status={labels[task.status] ?? task.status} /><small>{date(task.startsOn)} to {date(task.endsOn)}</small></button></li>)}</ul>
+            <ul className="proof-tasks">{tasks?.items.map((task) => <li key={task.id}><button type="button" className="proof-task" aria-label={`Select ${task.title}`} aria-pressed={task.id === selectedId} disabled={locked} onClick={() => { if (pendingRef.current) return; setSelectedId(task.id); setCommentPage(1); setDraft(''); setSaved(null); setSaveState('idle'); setSaveError(''); validation.clear() }}><strong>{task.title}</strong><p>{task.activity}</p><Badge status={labels[task.status] ?? task.status} /><small>{date(task.startsOn)} to {date(task.endsOn)}</small></button></li>)}</ul>
             <Pagination page={taskPage} hasMore={tasks?.hasMore ?? false} busy={taskBusy || locked} name="tasks" onPage={setTaskPage} />
           </div>
         </Card>
@@ -145,20 +145,19 @@ export function DataProof() {
           {selectedId && <>
             <section aria-label="Replies" aria-busy={commentBusy}>
               {commentBusy && <p>Loading replies…</p>}
-              {commentError && <p className="ui-error" role="alert">{saved ? 'Your reply is saved. ' : ''}{commentError}</p>}
+              {commentError && <><p className="ui-error">{saved ? 'Your reply is saved. ' : ''}{commentError}</p><AnnounceEvent event={{ id: `comments-error:${commentKey}`, message: `${saved ? 'Your reply is saved. ' : ''}${commentError}`, intent: 'alert' }} /></>}
               {!commentBusy && !commentError && comments?.items.length === 0 && <p>No replies yet.</p>}
               <ol className="proof-replies" tabIndex={0} aria-label="Persisted replies">{comments?.items.map((reply) => <li key={reply.id}><div><b>{reply.author.name}</b><time dateTime={reply.createdAt} aria-label={timestamp(reply.createdAt)}>{timestamp(reply.createdAt)}</time></div><p>{reply.body}</p></li>)}</ol>
               <Button size="small" disabled={commentBusy} onClick={() => setCommentRevision((value) => value + 1)}>Refresh replies</Button>
               <Pagination page={commentPage} hasMore={comments?.hasMore ?? false} busy={commentBusy} name="replies" onPage={setCommentPage} />
             </section>
             <form className="proof-composer" onSubmit={(event) => { event.preventDefault(); submit() }} noValidate>
-              <TextareaField label="Reply" ref={composerRef} value={draft} onChange={(event) => { setDraft(event.target.value); setFieldError(''); setFieldAnnouncement('') }} disabled={locked} required placeholder="Add a helpful update…" description={`${count} of ${proofTextLimit} characters. Surrounding whitespace is removed.`} error={fieldError || undefined} />
-              <p className="sr-only" role="status">{fieldAnnouncement}</p>
-              {storageError && <p role="alert" className="ui-error">{storageError}</p>}
-              {saveError && <p role="alert" className="ui-error">{saveError}</p>}
+              <TextareaField label="Reply" ref={composerRef} value={draft} onChange={(event) => { setDraft(event.target.value); validation.revalidate('reply') }} readOnly={locked} required placeholder="Add a helpful update…" description={`${count} of ${proofTextLimit} characters. Surrounding whitespace is removed.`} error={validation.errors.reply} />
+              {storageError && <><p className="ui-error">{storageError}</p><AnnounceEvent event={{ id: `storage-error:${saveAttempt}:${storageError}`, message: storageError, intent: 'alert' }} /></>}
+              {saveError && <><p className="ui-error">{saveError}</p><AnnounceEvent event={{ id: `save-error:${saveAttempt}:${saveError}`, message: saveError, intent: 'alert' }} /></>}
               {saveState === 'uncertain' && pending && <Button onClick={() => { if (pendingRef.current) void send(pendingRef.current) }}>Retry this reply</Button>}
               {saveState === 'cleanup' && <Button onClick={() => { if (clearRecovery()) setSaveState(saved ? 'saved' : 'idle') }}>Retry recovery cleanup</Button>}
-              <Button type="submit" size="small" disabled={locked || !selected || !!storageError}><MessageSquare aria-hidden="true" />{saveState === 'saving' ? 'Saving reply…' : 'Post reply'}</Button>
+              <Button type="submit" size="small" busy={saveState === 'saving'} disabled={(locked && saveState !== 'saving') || !selected || !!storageError}><MessageSquare aria-hidden="true" />{saveState === 'saving' ? 'Saving reply…' : 'Post reply'}</Button>
             </form>
           </>}
           {saved && <div className="proof-saved"><b>Reply saved to the local database.</b><p>{saved.body}</p><time dateTime={saved.createdAt}>{timestamp(saved.createdAt)}</time></div>}

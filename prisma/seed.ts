@@ -12,13 +12,20 @@ try {
   const plan = createSeedPlan()
   validateSeedPlan(plan)
   await prisma.$transaction(async (tx) => {
+    // Serialize source fixture construction and prefilter existing ids. A BEFORE
+    // history guard runs even for INSERT ON CONFLICT DO NOTHING.
+    await tx.$executeRaw`LOCK TABLE "EmploymentAssignment", "LeaveRecord" IN SHARE ROW EXCLUSIVE MODE`
     // Skip existing identities and immutable evidence. A repeated seed is not a reset.
     await tx.user.createMany({ data: [{ id: 'foundation-health', email: 'foundation-health@example.invalid',
       name: 'Local foundation check' }], skipDuplicates: true })
     await tx.user.createMany({ data: plan.users, skipDuplicates: true })
     await tx.business.createMany({ data: plan.businesses, skipDuplicates: true })
     await tx.unit.createMany({ data: plan.units, skipDuplicates: true })
-    await tx.employmentAssignment.createMany({ data: plan.assignments, skipDuplicates: true })
+    const assignmentIds = new Set((await tx.employmentAssignment.findMany({ where: { id: { in: plan.assignments.map((row) => row.id) } }, select: { id: true } })).map((row) => row.id))
+    await tx.employmentAssignment.createMany({ data: plan.assignments.filter((row) => !assignmentIds.has(row.id)), skipDuplicates: true })
+    const stableLeaves = plan.leaves.map((row) => { if (!row.id) throw new Error('Leave fixtures require stable ids'); return { ...row, id: row.id } })
+    const leaveIds = new Set((await tx.leaveRecord.findMany({ where: { id: { in: stableLeaves.map((row) => row.id) } }, select: { id: true } })).map((row) => row.id))
+    await tx.leaveRecord.createMany({ data: stableLeaves.filter((row) => !leaveIds.has(row.id)), skipDuplicates: true })
     await tx.workWeek.createMany({ data: plan.weeks, skipDuplicates: true })
     await tx.weeklyTracker.createMany({ data: plan.trackers, skipDuplicates: true })
     await tx.taskSeries.createMany({ data: plan.series, skipDuplicates: true })
@@ -26,7 +33,6 @@ try {
     await tx.weeklyTask.createMany({ data: plan.tasks.filter((row) => !row.carriedFromId), skipDuplicates: true })
     await tx.weeklyTask.createMany({ data: plan.tasks.filter((row) => row.carriedFromId), skipDuplicates: true })
     await tx.taskComment.createMany({ data: plan.comments, skipDuplicates: true })
-    await tx.leaveRecord.createMany({ data: plan.leaves, skipDuplicates: true })
     await tx.reliefAssignment.createMany({ data: plan.relief, skipDuplicates: true })
     await tx.approvalRequest.createMany({ data: plan.requests, skipDuplicates: true })
     await tx.approvalDecision.createMany({ data: plan.decisions, skipDuplicates: true })

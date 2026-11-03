@@ -46,6 +46,14 @@ npm run start
 # Test (explicit separate TEST_DATABASE_URL, not the ordinary Neon DB)
 npm run test:setup
 npm test
+
+# Employee Home regression and running app verification
+npm run test:employee
+npm run test:employee:browser
+
+# Accessibility (real running app plus separate manual NVDA/zoom evidence)
+npm run test:a11y:install
+npm run test:a11y
 ```
 
 ## Coding conventions and tooling
@@ -154,5 +162,9 @@ If the user is already on `main` or `staging` with local commits, move those com
 - [server/AGENTS.md](server/AGENTS.md): Express serving, server only database access, and readiness behavior.
 - [server/data-proof/AGENTS.md](server/data-proof/AGENTS.md): fixed local development proof, request guards, and reply retry semantics.
 - [server/auth/AGENTS.md](server/auth/AGENTS.md): linked credentials, sessions, current role context, policies, limits, audit and trusted provisioning.
+- [src/components/accessibility/AGENTS.md](src/components/accessibility/AGENTS.md): shared validation, scoped announcements, context cancellation and required browser evidence.
+- [server/telemetry/AGENTS.md](server/telemetry/AGENTS.md): bounded private file storage, sanitized capture, trusted event sources and telemetry verification.
+- [server/employee/AGENTS.md](server/employee/AGENTS.md): Employee projections, ordered write locks, receipts, ownership, calendar permissions and pagination.
+- [src/features/employee/AGENTS.md](src/features/employee/AGENTS.md): Employee Home selection, read cancellation, retained write operations, private state and drawer focus.
 
 _Human curated handoff for junior developers and AI coding agents. `/audit` and `/sync` should flag rather than overwrite intentional prose in Rules and Design source of truth._

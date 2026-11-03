@@ -157,3 +157,13 @@ textarea.ui-control { min-height: 96px; resize: vertical; }
   .preview-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (forced-colors: active) {
+  .ui-control, .ui-button, .ui-icon-button, .auth-password > button { border: 1px solid ButtonText; }
+  .workspace :is(a, button)[aria-current="page"] { text-decoration: underline; outline: 1px solid Highlight; outline-offset: -3px; }
+  .workspace :is(a, button):focus-visible, .ui-dialog :focus-visible, .ui-table-scroll:focus-visible, :focus-visible { outline: 2px solid Highlight; outline-offset: var(--focus-offset); }
+  select { appearance: auto; background-image: none; }
+}
+.telemetry-recovery { min-height: 100dvh; display: grid; align-content: center; padding: 24px; }
+.telemetry-recovery > .ui-card { width: min(100%, 540px); margin-inline: auto; }
+.telemetry-recovery h1 { font-size: var(--text-2xl); font-weight: 600; }
+.telemetry-recovery p { margin: 12px 0 24px; color: var(--color-gray-600); }

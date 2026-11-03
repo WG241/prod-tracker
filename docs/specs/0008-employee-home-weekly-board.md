@@ -1,7 +1,7 @@
 # 0008. Employee home and weekly board
 
 **Date**: 2026-10-28
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

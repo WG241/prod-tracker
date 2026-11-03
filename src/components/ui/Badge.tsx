@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 
 const statuses: Record<string, { tone: string; icon: LucideIcon }> = {
   Pending: { tone: 'neutral', icon: Circle },
+  Scheduled: { tone: 'info', icon: Clock },
   'In progress': { tone: 'info', icon: Clock },
   Blocked: { tone: 'danger', icon: OctagonAlert },
   'Awaiting approval': { tone: 'warning', icon: Hourglass },

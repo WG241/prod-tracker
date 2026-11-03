@@ -31,6 +31,7 @@ model User {
   decisions          ApprovalDecision[]     @relation("DecisionActor")
   coveredDecisions   ApprovalDecision[]     @relation("DecisionPrincipal")
   leaves             LeaveRecord[]          @relation("LeaveOwner")
+  leaveMutationReceipts LeaveMutationReceipt[]
   cancelledLeaves    LeaveRecord[]          @relation("LeaveCanceller")
   coveredLeaves      ReliefAssignment[]     @relation("CoveredManager")
   reliefCover        ReliefAssignment[]     @relation("ReliefManager")
@@ -43,6 +44,7 @@ model User {
   auditEvents        AuditEvent[]
   notifications      Notification[]
   authIdentity       AuthUser?
+  taskMutationReceipts TaskMutationReceipt[]
 }
 
 model AuthUser {
@@ -236,6 +238,7 @@ model WorkWeek {
   startsOn         DateTime  @unique @db.Date
   planningLocksAt  DateTime  @db.Timestamptz(3)
   freezesAt        DateTime  @db.Timestamptz(3)
+  rosterCapturedAt DateTime? @db.Timestamptz(3)
   manuallyLockedAt DateTime? @db.Timestamptz(3)
   lockedById       String?
   lockReason       String?
@@ -298,6 +301,7 @@ model WeeklyTask {
   deletedAt      DateTime?  @db.Timestamptz(3)
   createdAt      DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  revision       Int        @default(0)
 
   owner         User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   series        TaskSeries        @relation(fields: [seriesId, ownerId], references: [id, ownerId], onDelete: Restrict)
@@ -307,6 +311,7 @@ model WeeklyTask {
   comments      TaskComment[]
   approvals     ApprovalRequest[]
   notifications Notification[]
+  mutationReceipts TaskMutationReceipt[]
 
   @@unique([seriesId, trackerId])
   @@unique([id, ownerId])
@@ -316,6 +321,22 @@ model WeeklyTask {
   @@index([seriesId, ownerId])
   @@index([trackerId, ownerId])
   @@index([carriedFromId, seriesId])
+}
+
+model TaskMutationReceipt {
+  userId      String
+  requestId   String   @db.Uuid
+  operation   String
+  requestHash String   @db.Char(64)
+  taskId      String
+  result      Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  task WeeklyTask @relation(fields: [taskId, userId], references: [id, ownerId], onDelete: Restrict)
+
+  @@id([userId, requestId])
+  @@index([taskId, userId])
 }
 
 model TaskComment {
@@ -392,10 +413,26 @@ model LeaveRecord {
   cancelledBy   User?              @relation("LeaveCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
   relief        ReliefAssignment[]
   notifications Notification[]
+  mutationReceipts LeaveMutationReceipt[]
 
   @@unique([id, userId])
   @@index([userId, startsOn, expectedReturnOn])
   @@index([cancelledById])
+}
+
+model LeaveMutationReceipt {
+  userId String
+  requestId String @db.Uuid
+  operation String
+  requestHash String @db.Char(64)
+  leaveId String
+  result Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  leave LeaveRecord @relation(fields: [leaveId, userId], references: [id, userId], onDelete: Restrict)
+  @@id([userId, requestId])
+  @@index([leaveId, userId])
 }
 
 model ReliefAssignment {
@@ -424,6 +461,7 @@ model ReliefAssignment {
 
 model TrackerSettings {
   id                  String   @id @default("workforce-group")
+  trackingStartsOn    DateTime? @db.Date
   timezone            String   @default("Africa/Lagos")
   openingDay          Weekday  @default(MONDAY)
   openingTime         String   @default("08:00")

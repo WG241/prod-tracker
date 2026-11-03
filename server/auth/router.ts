@@ -7,6 +7,7 @@ import { AuthFailure, messages } from './errors.ts'
 import type { AuthService } from './service.ts'
 import { providerHeaders } from './service.ts'
 import { checkEmail, clientIp, recordFailure, reserve, throttleKey } from './throttle.ts'
+import type { Capture } from '../telemetry/service.ts'
 
 export function forwardCookies(response: Response, headers: Headers) {
   // Append each cookie separately. Passing the getSetCookie() array to append can
@@ -21,14 +22,15 @@ function originAllowed(request: Request, config: AuthConfig, mutation: boolean) 
     && (!site || site === 'same-origin' || (!mutation && site === 'none'))
 }
 
-function fail(response: Response, error: unknown) {
+function sendFailure(response: Response, error: unknown, capture: Capture = () => {}) {
   const failure = error instanceof AuthFailure ? error : new AuthFailure('SERVICE_UNAVAILABLE', 503)
-  if (!(error instanceof AuthFailure)) console.error('auth_request_failed')
+  if (!(error instanceof AuthFailure) || error.status >= 500) capture('API_UNAVAILABLE', 'api', 'api', error, failure.status)
   if (failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
   return response.status(failure.status).json({ error: { code: failure.code, message: failure.message } })
 }
 
-export function registerAuth(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig) {
+export function registerAuth(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig, capture: Capture = () => {}) {
+  const fail = (response: Response, error: unknown) => sendFailure(response, error, capture)
   const authRouter = express.Router()
   authRouter.use((request, response, next) => {
     response.setHeader('Cache-Control', 'no-store')
@@ -94,7 +96,7 @@ export function registerAuth(api: Router, db: PrismaClient, service: AuthService
   })
 }
 
-export function registerNavigation(app: express.Express, service: AuthService, development: boolean) {
+export function registerNavigation(app: express.Express, service: AuthService, development: boolean, capture: Capture = () => {}) {
   app.use(async (request, response, next) => {
     const documentRequest = request.get('accept')?.split(',').some((part) => part.trim().startsWith('text/html'))
     if (!['GET', 'HEAD'].includes(request.method) || !documentRequest || /\.[^/]+$/.test(request.path)) return next()
@@ -118,7 +120,8 @@ export function registerNavigation(app: express.Express, service: AuthService, d
         : Object.values(roleRoutes).some((role) => role.prefix !== rolePrefix && (request.path === role.prefix || request.path.startsWith(`${role.prefix}/`))) ? '?notice=access-denied' : ''
       response.redirect(303, context.landingPath + notice)
     } catch (error) {
-      if (error instanceof AuthFailure && error.status === 403) return fail(response, error)
+      if (error instanceof AuthFailure && error.status === 403) return sendFailure(response, error, capture)
+      if (!(error instanceof AuthFailure) || error.status >= 500) capture('API_UNAVAILABLE', 'api', 'api', error, 503)
       // Serve only the SPA's neutral retry presentation, never a role shell.
       response.status(503)
       // Vite sends HTML with status200. Keep the guard's failure status when
