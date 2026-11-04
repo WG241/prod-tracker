@@ -12,7 +12,7 @@
   margin: 40px 0 16px;
   color: var(--color-ink);
 }
-.auth-art-description { color: var(--color-muted); max-width: 350px; margin-top: 18px; font-size: var(--text-base); }
+.auth-art-description { color: var(--color-gray-600); max-width: 350px; margin-top: 18px; font-size: var(--text-base); }
 .auth-art-footer { color: var(--color-gray-600); font-size: 12px; }
 .auth-visual {
   background: var(--color-surface);
@@ -61,6 +61,7 @@
 .auth-form-panel form { margin-top: 30px; }
 .auth-form-panel .ui-field { gap: 7px; margin-bottom: 18px; }
 .auth-form-panel .ui-field > label { font-size: var(--text-md); font-weight: var(--font-weight-medium); color: var(--color-gray-700); }
+.auth-form-panel .ui-control { border-color: var(--color-border); }
 .auth-password { position: relative; }
 .auth-password input { width: 100%; padding-right: 48px; }
 .auth-password > button { position: absolute; right: 5px; top: 1px; width: 40px; height: 40px; }

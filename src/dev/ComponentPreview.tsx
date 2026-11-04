@@ -43,7 +43,7 @@ export function ComponentPreview() {
             <InputField label="Task title with error" defaultValue="" error="Enter a title and activity." required />
             <InputField label="Locked title" value="Complete candidate shortlist" disabled readOnly description="Approved tasks cannot be edited." />
             <InputField label="Start date" type="date" defaultValue="2026-10-19" />
-            <SelectField label="Status" defaultValue="In progress"><option>Pending</option><option>In progress</option><option>Blocked</option><option>Completed</option></SelectField>
+            <SelectField label="Status" className="ui-select-compact" defaultValue="In progress"><option>Pending</option><option>In progress</option><option>Blocked</option><option>Completed</option></SelectField>
             <SelectField label="Locked status" disabled defaultValue="Approved"><option>Approved</option></SelectField>
             <TextareaField label="Activity" placeholder="Describe the work for this week…" />
             <TextareaField label="Locked activity" disabled defaultValue="Share the weekly pipeline summary." />

@@ -140,7 +140,62 @@ test('AC-3,5 temporary sign in pending preserves Enter focus and guards repeated
   })
 })
 
+test('AC-4 sign in fields retain the prototype border treatment', async () => {
+  await pageFor(async (page) => {
+    await page.goto(settings.base + '/sign-in', { waitUntil: 'domcontentloaded' })
+    await page.getByRole('heading', { name: 'Welcome back', exact: true }).waitFor()
+    const field = page.getByLabel('Work email', { exact: true })
+    const style = await field.evaluate((element) => {
+      const computed = getComputedStyle(element)
+      return {
+        borderColor: computed.borderColor,
+        borderWidth: computed.borderTopWidth,
+        borderRadius: computed.borderTopLeftRadius,
+        minHeight: computed.minHeight,
+        padding: computed.padding,
+      }
+    })
+    assert.deepEqual(style, {
+      borderColor: 'rgb(209, 213, 219)',
+      borderWidth: '1px',
+      borderRadius: '7px',
+      minHeight: '40px',
+      padding: '9px 12px',
+    })
+  })
+})
+
 if (settings.target === 'development') {
+  test('AC-4 React buttons use the compact task drawer status selector geometry', async () => {
+    await pageFor(async (page) => {
+      await page.goto(settings.base + '/__ui', { waitUntil: 'domcontentloaded' })
+      await page.getByRole('heading', { name: 'Component preview', exact: true }).waitFor()
+      const button = page.getByRole('button', { name: 'Default', exact: true })
+      const status = page.getByLabel('Status', { exact: true })
+      const geometry = await page.evaluate(() => {
+        const button = document.querySelector<HTMLButtonElement>('.ui-button-default')
+        const status = document.querySelector<HTMLSelectElement>('.ui-select-compact')
+        if (!button || !status) throw new Error('Button or compact status selector missing from component preview')
+        const buttonStyle = getComputedStyle(button)
+        const statusStyle = getComputedStyle(status)
+        return {
+          buttonHeight: button.getBoundingClientRect().height,
+          statusHeight: status.getBoundingClientRect().height,
+          buttonBorderWidth: buttonStyle.borderTopWidth,
+          statusBorderWidth: statusStyle.borderTopWidth,
+          buttonRadius: buttonStyle.borderTopLeftRadius,
+          statusRadius: statusStyle.borderTopLeftRadius,
+        }
+      })
+      assert.equal(await button.isVisible(), true)
+      assert.equal(await status.isVisible(), true)
+      assert.equal(geometry.buttonHeight, geometry.statusHeight, 'Buttons must match the task drawer status selector height')
+      assert.notEqual(geometry.buttonHeight, 40, 'Buttons must not regress to the 40px control height')
+      assert.equal(geometry.buttonBorderWidth, geometry.statusBorderWidth, 'Button and selector borders must stay aligned')
+      assert.equal(geometry.buttonRadius, geometry.statusRadius, 'Button and selector corner radii must stay aligned')
+    })
+  })
+
   test('AC-6 enabled field boundaries and focus have measured contrast against their actual background', async () => {
     await pageFor(async (page) => {
       await page.goto(settings.base + '/__ui', { waitUntil: 'domcontentloaded' })

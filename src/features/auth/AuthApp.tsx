@@ -52,7 +52,7 @@ function UnavailableFeature({ role, selected, headingRef, signingOut }: { role: 
   return <><div className="workspace-page-heading"><p className="eyebrow">{role} workspace</p><h1 ref={headingRef} tabIndex={-1}>{selected}</h1></div><div className="workspace-unavailable" role="note"><span className="workspace-unavailable-dot" aria-hidden="true" /><span>{signingOut ? 'Signing out…' : 'This page is coming soon.'}</span></div></>
 }
 
-function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView, onSessionInvalid, operations, historyView, onHistoryView, leaveOperations, leaveView, onLeaveView }: { context: SessionContext; notice: string; employeeView: EmployeeView; onEmployeeView: (value: EmployeeView) => void; onSessionInvalid: () => void; operations: TaskOperations; historyView: HistoryView; onHistoryView: (next: HistoryView) => void; leaveOperations: LeaveOperations; leaveView: LeaveView; onLeaveView: (next: LeaveView) => void }) {
+function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView, onSessionInvalid, operations, historyView, onHistoryView, leaveOperations, leaveView, onLeaveView, revalidating }: { context: SessionContext; notice: string; employeeView: EmployeeView; onEmployeeView: (value: EmployeeView) => void; onSessionInvalid: () => void; operations: TaskOperations; historyView: HistoryView; onHistoryView: (next: HistoryView) => void; leaveOperations: LeaveOperations; leaveView: LeaveView; onLeaveView: (next: LeaveView) => void; revalidating: boolean }) {
   useWorkspaceView()
   const role = roleRoutes[context.role].label
   const workspace = { ...workspaces[role], name: context.user.name }
@@ -61,13 +61,23 @@ function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView,
   useEffect(() => { const pop = () => setPath(window.location.pathname); window.addEventListener('popstate', pop); return () => window.removeEventListener('popstate', pop) }, [])
   const heading = useRef<HTMLHeadingElement>(null)
   const didFocus = useRef(false)
+  const focusedFor = useRef('')
   const signOutLock = useRef(false)
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState('')
   const announce = useAnnounce()
   const signOutAttempt = useRef(0)
   const retry = useRetryDelay()
-  useLayoutEffect(() => { document.title = `${selected} · Workforce`; if (didFocus.current) heading.current?.focus(); else didFocus.current = true }, [selected])
+  useLayoutEffect(() => { document.title = `${selected} · Workforce` }, [selected])
+  // Focus the destination heading once it is mounted. Because pages are lazy
+  // loaded, the heading ref may still be null when `selected` first changes.
+  // This post-render effect keeps checking until the heading for the current
+  // destination attaches, then focuses it exactly once per destination.
+  useEffect(() => {
+    if (!didFocus.current) { didFocus.current = true; return }
+    if (focusedFor.current === selected) return
+    if (heading.current) { heading.current.focus(); focusedFor.current = selected }
+  })
   async function signOut() {
     if (signOutLock.current || retry.seconds) return
     signOutLock.current = true
@@ -88,7 +98,7 @@ function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView,
   return <WorkspaceShell workspace={workspace} selected={selected} onSelect={() => {}} onNavigate={(next) => { window.history.pushState(null, '', next); setPath(next) }} headingRef={heading} navigation={context.navigation} onSignOut={() => void signOut()} signingOut={signingOut} signOutRetrySeconds={retry.seconds}>
     {notice && <NoticeToast message={notice} />}
     {error && <p className="auth-banner auth-error">{error}</p>}
-    {context.role === 'EMPLOYEE' && selected === 'Home' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeHome leaveOperations={leaveOperations} operations={operations} name={context.user.name} state={employeeView.userId === context.user.id ? employeeView : initialEmployeeView(context.user.id)} onState={onEmployeeView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : context.role === 'EMPLOYEE' && selected === 'History' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeHistory operations={operations} state={historyView.userId === context.user.id ? historyView : initialHistoryView(context.user.id)} onState={onHistoryView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : context.role === 'EMPLOYEE' && selected === 'Leave' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeLeave operations={leaveOperations} state={leaveView.userId === context.user.id ? leaveView : initialLeaveView(context.user.id)} onState={onLeaveView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : <UnavailableFeature role={role} selected={selected} headingRef={heading} signingOut={signingOut} />}
+    {revalidating ? <WorkspaceContentFallback /> : context.role === 'EMPLOYEE' && selected === 'Home' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeHome leaveOperations={leaveOperations} operations={operations} name={context.user.name} state={employeeView.userId === context.user.id ? employeeView : initialEmployeeView(context.user.id)} onState={onEmployeeView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : context.role === 'EMPLOYEE' && selected === 'History' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeHistory operations={operations} state={historyView.userId === context.user.id ? historyView : initialHistoryView(context.user.id)} onState={onHistoryView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : context.role === 'EMPLOYEE' && selected === 'Leave' && !signingOut ? <Suspense fallback={<WorkspaceContentFallback />}><EmployeeLeave operations={leaveOperations} state={leaveView.userId === context.user.id ? leaveView : initialLeaveView(context.user.id)} onState={onLeaveView} headingRef={heading} onSessionInvalid={onSessionInvalid} /></Suspense> : <UnavailableFeature role={role} selected={selected} headingRef={heading} signingOut={signingOut} />}
   </WorkspaceShell>
 }
 
@@ -96,6 +106,7 @@ export function AuthApp() {
   const [operations] = useState(() => new TaskOperations())
   const [leaveOperations] = useState(() => new LeaveOperations())
   const [context, setContext] = useState<SessionContext | null>(null)
+  const [revalidating, setRevalidating] = useState(false)
   const [state, setState] = useState<'loading' | 'ready' | 'anonymous' | 'error'>(
     window.location.pathname === '/sign-in' ? 'anonymous' : 'loading',
   )
@@ -121,7 +132,11 @@ export function AuthApp() {
       controller.current?.abort()
       const abort = new AbortController()
       controller.current = abort
-      if (!hasContext.current && window.location.pathname !== '/sign-in') { setContext(null); setState('loading') }
+      const hadContext = hasContext.current
+      if (!hadContext && window.location.pathname !== '/sign-in') { setContext(null); setState('loading') }
+      // Unmount private views while re-checking an existing session so a
+      // different identity cannot inherit the previous employee's reads.
+      if (hadContext) setRevalidating(true)
       try {
         const next = await authRequest('/api/session', undefined, abort.signal)
         if (abort.signal.aborted || version !== requestVersion.current || !next) return
@@ -134,12 +149,14 @@ export function AuthApp() {
         operations.bind(`${next.user.id}:${next.role}`)
         leaveOperations.bind(`${next.user.id}:${next.role}`)
         protectedView.current = true
+        setRevalidating(false)
         setState('ready')
       } catch (failure) {
         const aborted = failure instanceof DOMException && failure.name === 'AbortError'
         if (aborted || version !== requestVersion.current) return
         const onSignIn = window.location.pathname === '/sign-in'
         const unauthorized = failure instanceof SessionError && failure.status === 401
+        setRevalidating(false)
         if (unauthorized || onSignIn) {
           hasContext.current = false
           operations.clear()
@@ -163,13 +180,14 @@ export function AuthApp() {
       if (document.visibilityState === 'hidden') { controller.current?.abort(); ++requestVersion.current }
       else void resolveSession()
     }
-    const pageshow = () => { if (protectedView.current && document.visibilityState === 'visible') void resolveSession() }
+    const foreground = () => { if (protectedView.current && document.visibilityState === 'visible') void resolveSession() }
     document.addEventListener('visibilitychange', visibility)
-    window.addEventListener('pageshow', pageshow)
-    return () => { controller.current?.abort(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pageshow', pageshow) }
+    window.addEventListener('focus', foreground)
+    window.addEventListener('pageshow', foreground)
+    return () => { controller.current?.abort(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('focus', foreground); window.removeEventListener('pageshow', foreground) }
   }, [revision, startRetry, operations, leaveOperations])
   if (state === 'anonymous') return <SignIn notice={notice} />
-  if (state === 'ready' && context) return <AuthenticatedWorkspace leaveOperations={leaveOperations} leaveView={leaveView} onLeaveView={setLeaveView} historyView={historyView} onHistoryView={setHistoryView} operations={operations} context={context} notice={notice} employeeView={employeeView} onEmployeeView={setEmployeeView} onSessionInvalid={() => { hasContext.current = false; operations.clear(); leaveOperations.clear(); setEmployeeView(initialEmployeeView('')); setHistoryView(initialHistoryView('')); setLeaveView(initialLeaveView('')); setContext(null); setState('loading'); setRevision((value) => value + 1) }} />
+  if (state === 'ready' && context) return <AuthenticatedWorkspace key={`${context.user.id}:${context.role}`} leaveOperations={leaveOperations} leaveView={leaveView} onLeaveView={setLeaveView} historyView={historyView} onHistoryView={setHistoryView} operations={operations} context={context} notice={notice} employeeView={employeeView} onEmployeeView={setEmployeeView} onSessionInvalid={() => { hasContext.current = false; operations.clear(); leaveOperations.clear(); setEmployeeView(initialEmployeeView('')); setHistoryView(initialHistoryView('')); setLeaveView(initialLeaveView('')); setContext(null); setState('loading'); setRevision((value) => value + 1) }} revalidating={revalidating} />
   if (state === 'loading') {
     return <main className="auth-pending auth-pending-loading">
       <BrandLoader label="Loading workspace…" />

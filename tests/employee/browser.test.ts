@@ -130,7 +130,7 @@ test('AC-6 failed selection clears old tasks, Retry reloads, and a closed drawer
     const gate = new Promise<void>((resolve) => { release = resolve })
     await page.route('**/api/employee/tasks/*', async (route) => { await gate; await route.continue().catch(() => {}) })
     await page.locator('.employee-task-open').first().click()
-    await page.getByRole('dialog').locator('p').filter({ hasText: /^Loading task…$/ }).waitFor()
+    await page.getByRole('dialog').getByLabel('Loading details').waitFor()
     await page.keyboard.press('Escape')
     release()
     assert.equal(await page.getByRole('dialog').count(), 0)

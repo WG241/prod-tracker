@@ -10,6 +10,12 @@ jobs:
     name: Greptile P1/P2 client fixes
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # prisma.config.ts reads DATABASE_URL_UNPOOLED at config-eval time
+      # (postinstall runs `prisma generate`). These client regressions do
+      # not need a live database, so a harmless placeholder URL is enough.
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/postgres
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

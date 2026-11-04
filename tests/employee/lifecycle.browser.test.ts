@@ -135,7 +135,7 @@ test('AC8,10 close after committed response loss, reopen same intent and retry w
   await page.getByRole('button', { name: 'Add task', exact: true }).first().click()
   await page.getByRole('button', { name: 'Retry', exact: true }).waitFor()
   assert.equal(await page.getByLabel('Task title', { exact: true }).inputValue(), retryTitle)
-  assert.equal(await page.getByLabel('Task title', { exact: true }).isDisabled(), true)
+  assert.equal(await page.getByLabel('Task title', { exact: true }).isEditable(), false)
   await saved(() => page.getByRole('button', { name: 'Retry', exact: true }).click())
   assert.equal(keys.length, 2); assert.equal(keys[0], keys[1])
   const home = await (await context.request.get(`${base}/api/employee/home`)).json() as HomeResponse

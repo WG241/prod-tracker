@@ -61,7 +61,7 @@
   --color-teal: #0f766e;
   --color-amber: #92400e;
   --color-red: #b91c1c;
-  --color-control-border: #d1d5db;
+  --color-control-border: #6b7280;
   --color-declined-fg: #c2410c;
   --color-declined-bg: #fff7ed;
   --color-hold-fg: #5b21b6;
@@ -231,7 +231,7 @@
   --sidebar-width: 15.5rem; /* 248px */
   --sidebar-width-md: 13.4375rem; /* 215px */
   --sidebar-width-collapsed: 4.625rem; /* 74px */
-  --topbar-height: 3.375rem; /* 54px */
+  --topbar-height: 4.5rem; /* 72px */
   --topbar-height-sm: 3.75rem; /* 60px */
   --content-max: 90.625rem; /* 1450px (v1.2) */
   --content-padding: 2rem; /* 32px */
@@ -254,6 +254,12 @@
   --icon-stroke: 1.6;
   --avatar-size: 2.25rem; /* 36px */
   --avatar-size-sm: 1.875rem; /* 30px */
+
+  /* Compact React buttons match the task drawer status selector. */
+  --button-height: var(--control-height-md);
+  --button-radius: var(--radius-lg);
+  --button-padding-y: var(--spacing-1\.5);
+  --button-padding-x: var(--spacing-3);
 
   /* Z-index layers */
   --z-proto: 50;

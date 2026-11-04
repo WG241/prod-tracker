@@ -23,11 +23,11 @@ import type { LeaveOperations } from './leave-operations.ts'
 import { LeaveFeedback } from './EmployeeLeave.tsx'
 import './employee.css'
 
-function TaskItem({ task, onOpen, onAction }: { task: TaskEntry; onOpen: (id: string) => void; onAction: (task: TaskEntry, action: TaskAction) => void }) {
+function TaskItem({ task, onOpen, onAction, stale }: { task: TaskEntry; onOpen: (id: string) => void; onAction: (task: TaskEntry, action: TaskAction) => void; stale: boolean }) {
   const StatusIcon = { PENDING: Circle, IN_PROGRESS: Clock, BLOCKED: OctagonAlert, AWAITING_APPROVAL: Hourglass, APPROVED: CheckCircle2, DECLINED: Undo2, ON_HOLD: Pause, CANCELLED: Circle }[task.status]
   return <article className="employee-task">
     <button className="employee-task-open" onClick={() => onOpen(task.id)}><span className={`employee-task-check employee-status-${task.status}`} aria-hidden="true"><StatusIcon /></span><span className="employee-task-content"><h3>{task.title}</h3><p>{task.activity}</p><span className="employee-task-flags">{(task.carryRequested || task.carriedFrom) && <span><Repeat2 aria-hidden="true" />{task.carriedFrom ? 'Carried over' : 'Carries over'}</span>}{task.status === 'AWAITING_APPROVAL' && <span>Awaiting manager</span>}{(task.status === 'BLOCKED' || task.status === 'DECLINED') && <span>{taskStatuses[task.status]}</span>}</span></span></button>
-    <div className="employee-task-side"><div className="employee-task-side-top"><small className="employee-task-date">{displayDate(task.startsOn, false)} – {displayDate(task.endsOn)}</small><TaskMenu task={task} onAction={onAction} /></div><Badge status={taskStatuses[task.status]} /></div>
+    <div className="employee-task-side"><div className="employee-task-side-top"><small className="employee-task-date">{displayDate(task.startsOn, false)} – {displayDate(task.endsOn)}</small><TaskMenu task={task} onAction={onAction} stale={stale} /></div><Badge status={taskStatuses[task.status]} /></div>
   </article>
 }
 
@@ -117,11 +117,11 @@ export function EmployeeHome({ name, state, onState, headingRef, onSessionInvali
         {read.loading && !data && <SkeletonTaskList count={5} />}
         {read.loading && <AnnounceEvent event={{ id: `home-loading:${params}`, message: 'Loading tracker…', intent: 'status' }} />}
         {read.error && <div className="employee-banner employee-amber"><p>{read.error}</p><Button size="small" onClick={read.retry}>Retry</Button><AnnounceEvent event={{ id: `home-error:${params}:${read.error}`, message: read.error, intent: 'alert' }} /></div>}
-        {data && <>{read.stale && <p className="employee-read-message">This tracker may be out of date. Last loaded {displayTime(data.asOf)}.</p>}{data.tasks.items.length ? <div className={`employee-tasks ${view === 'Card' ? 'employee-task-grid' : ''}`}>{data.tasks.items.map((task) => <TaskItem key={task.id} task={task} onOpen={setTaskId} onAction={act} />)}</div> : <div className="employee-empty"><CalendarDays aria-hidden="true" /><h3>A fresh week, a clear focus.</h3><p>Add your first task to this week’s tracker.</p>{!inspection && planningOpen && !data.leave.paused && <Button variant="primary" disabled={read.stale} onClick={add}>Add task</Button>}</div>}<Pagination value={data.tasks} label="tasks" onPage={(page) => { setTaskId(null); onState({ ...state, page }) }} /></>}
+        {data && <>{read.stale && <p className="employee-read-message">This tracker may be out of date. Last loaded {displayTime(data.asOf)}.</p>}{data.tasks.items.length ? <div className={`employee-tasks ${view === 'Card' ? 'employee-task-grid' : ''}`}>{data.tasks.items.map((task) => <TaskItem key={task.id} task={task} onOpen={setTaskId} onAction={act} stale={read.stale} />)}</div> : <div className="employee-empty"><CalendarDays aria-hidden="true" /><h3>A fresh week, a clear focus.</h3><p>Add your first task to this week’s tracker.</p>{!inspection && planningOpen && !data.leave.paused && <Button variant="primary" disabled={read.stale} onClick={add}>Add task</Button>}</div>}<Pagination value={data.tasks} label="tasks" onPage={(page) => { setTaskId(null); onState({ ...state, page }) }} /></>}
       </div>
       <div className="employee-week-bottom"><Check aria-hidden="true" />Your updates are your submission. There’s nothing extra to submit.</div>
     </section>
-    <div className="employee-support"><span><LockKeyhole aria-hidden="true" />Visible to your line manager and authorised leadership</span><a href="/employee/leave"><Umbrella aria-hidden="true" />Taking time off?</a></div>
+    <div className="employee-support"><span><LockKeyhole aria-hidden="true" /><span className="employee-support-text">Visible to your line manager and authorised leadership</span></span><a href="/employee/leave"><Umbrella aria-hidden="true" />Taking time off?</a></div>
     {data?.leave.repairRequired && <p className="employee-banner employee-amber">Your leave periods need review. Contact HR before making another leave change.</p>}
     <LeaveFeedback operations={leaveStore} onRetry={() => { if (leaveStore.record) void leaveStore.send(leaveStore.record.operation, onSessionInvalid) }} onReload={() => { leaveStore.discard(); read.retry() }} />
     {leaveStore.record?.state === 'committed' && read.error && <p className="employee-banner employee-amber">Your leave change was saved. Retry loading the latest tracker.</p>}

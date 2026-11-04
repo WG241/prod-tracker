@@ -4,7 +4,7 @@ import { IconButton } from '../../components/ui/Button.tsx'
 import type { TaskEntry } from './contracts.ts'
 
 export type TaskAction = 'EDIT' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' | 'PENDING' | 'CARRY' | 'DELETE'
-export function TaskMenu({ task, onAction }: { task: TaskEntry; onAction: (task: TaskEntry, action: TaskAction) => void }) {
+export function TaskMenu({ task, onAction, stale }: { task: TaskEntry; onAction: (task: TaskEntry, action: TaskAction) => void; stale: boolean }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null), id = useId()
   function focusButton() { root.current?.querySelector<HTMLButtonElement>('button')?.focus() }
@@ -21,5 +21,5 @@ export function TaskMenu({ task, onAction }: { task: TaskEntry; onAction: (task:
     if (event.key === 'Escape') { event.preventDefault(); setOpen(false); focusButton() }
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); items[event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus() }
     if (event.key === 'Tab') { focusButton(); setOpen(false) }
-  }}>{([['EDIT', 'Edit', task.permissions.canEdit], ['IN_PROGRESS', 'In progress', task.permissions.canChangeStatus], ['COMPLETED', 'Completed', task.permissions.canChangeStatus], ['DELETE', 'Delete', task.permissions.canDelete]] as const).map(([action, label, enabled]) => <button role="menuitem" tabIndex={-1} key={action} disabled={!enabled} title={!enabled ? task.permissions.reason ?? undefined : undefined} onClick={() => { focusButton(); setOpen(false); onAction(task, action) }}>{label}</button>)}</div>}</div>
+  }}>{([['EDIT', 'Edit', task.permissions.canEdit], ['IN_PROGRESS', 'In progress', task.permissions.canChangeStatus], ['COMPLETED', 'Completed', task.permissions.canChangeStatus], ['DELETE', 'Delete', task.permissions.canDelete]] as const).map(([action, label, enabled]) => <button role="menuitem" tabIndex={-1} key={action} disabled={!enabled || stale} title={!enabled ? task.permissions.reason ?? undefined : stale ? 'This tracker is out of date. Reload to check available actions.' : undefined} onClick={() => { focusButton(); setOpen(false); onAction(task, action) }}>{label}</button>)}</div>}</div>
 }
