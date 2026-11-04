@@ -1,9 +1,12 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useAnnounce } from './useAnnounce.ts'
+import { patchFieldError } from './field-errors.ts'
+import type { FieldErrors } from './field-errors.ts'
+
+export type { FieldErrors }
 
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-export type FieldErrors<Key extends string> = Partial<Record<Key, string>>
 type NamedField<Key extends string> = { name: Key; label: string; ref: RefObject<Control | null> }
 
 export function useFormValidation<Key extends string>({ fields, validate }: {
@@ -38,9 +41,7 @@ export function useFormValidation<Key extends string>({ fields, validate }: {
     reportErrors,
     clear: () => { pending.current = null; setErrors({}) },
     revalidate: (name: Key) => {
-      if (!errors[name]) return
-      const next = validate()[name]
-      setErrors((current) => ({ ...current, [name]: next }))
+      setErrors((current) => patchFieldError(current, name, validate()[name]))
     },
   }
 }

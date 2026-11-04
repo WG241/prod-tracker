@@ -3,6 +3,7 @@ import { Drawer } from '../../components/ui/Dialog.tsx'
 import { Button } from '../../components/ui/Button.tsx'
 import { Badge } from '../../components/ui/Badge.tsx'
 import { SelectField, TextareaField } from '../../components/ui/Field.tsx'
+import { SkeletonDetail } from '../../components/ui/Skeleton.tsx'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 import type { DetailResponse } from './contracts.ts'
 import { taskStatuses } from './contracts.ts'
@@ -15,6 +16,7 @@ import { useTaskOperations } from './operations.ts'
 import type { TaskOperations } from './operations.ts'
 import { useEffect } from 'react'
 import { useFormValidation } from '../../components/accessibility/useFormValidation.ts'
+import { pendingTextProps } from './pending-fields.ts'
 
 export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, operations, onAction }: { taskId: string; onClose: () => void; onSessionInvalid: () => void; inspection: boolean; operations: TaskOperations; onAction: (task: TaskEntry, action: TaskAction) => void }) {
   const [page, setPage] = useState(1)
@@ -25,9 +27,10 @@ export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, oper
   useEffect(() => { if (seenCommit.current !== store.commits) { seenCommit.current = store.commits; read.retry() } }, [store.commits, read])
   const editableContext = data && !inspection && !data.frozen && data.week.startsOn === data.currentWeekStart && !data.week.pausedForLeave
   const approved = !inspection && !data?.frozen && data?.task.status === 'APPROVED'
-  return <Drawer open title={data?.frozen ? 'Frozen task record' : 'Task details'} onClose={onClose} initialFocusRef={recordRef} footer={<>{(approved || editableContext) ? <Button disabled={!data?.task.permissions.canEdit || read.stale} title={data?.task.permissions.reason ?? undefined} onClick={() => data && onAction(data.task, 'EDIT')}>Edit task</Button> : <small>Read only record</small>}<Button onClick={onClose}>Close</Button></>}>
+  return <Drawer open title={data?.frozen ? 'Frozen task record' : 'Task details'} onClose={onClose} initialFocusRef={recordRef} footer={<>{(approved || editableContext) ? <Button disabled={!data?.task.permissions.canEdit || read.stale} title={data?.task.permissions.reason ?? undefined} onClick={() => data && onAction(data.task, 'EDIT')}>Edit task</Button> : <small></small>}<Button onClick={onClose}>Close</Button></>}>
     <div ref={recordRef} role="region" aria-label="Task record" tabIndex={0} aria-busy={read.loading || undefined}>
-      {read.loading && <><p className="employee-read-message">Loading task…</p><AnnounceEvent event={{ id: `detail-loading:${taskId}:${page}`, message: 'Loading task…', intent: 'status' }} /></>}
+      {read.loading && !data && <SkeletonDetail />}
+      {read.loading && <AnnounceEvent event={{ id: `detail-loading:${taskId}:${page}`, message: 'Loading task…', intent: 'status' }} />}
       {read.error && <div className="employee-banner employee-amber"><p>{read.error}</p><Button size="small" onClick={read.retry}>Retry</Button><AnnounceEvent event={{ id: `detail-error:${taskId}:${page}:${read.error}`, message: read.error, intent: 'alert' }} /></div>}
       {data && <>
         {read.stale && <p className="employee-read-message">This task may be out of date. Last loaded {displayTime(data.asOf)}.</p>}
@@ -54,10 +57,14 @@ export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, oper
 function Reply({ task, operations, disabled, onSessionInvalid }: { task: TaskEntry; operations: TaskOperations; disabled: boolean; onSessionInvalid: () => void }) {
   const store = useTaskOperations(operations), key = `COMMENT:${task.id}`, record = store.get(key)
   const [body, setBody] = useState(() => record?.operation.kind === 'COMMENT' && ['pending', 'uncertain'].includes(record.state) ? record.operation.body : '')
+  const bodyRef = useRef(body)
   const ref = useRef<HTMLTextAreaElement>(null)
-  const validation = useFormValidation({ fields: [{ name: 'body', label: 'Reply', ref }], validate: () => !body.trim() || body.trim().length > 4000 ? { body: 'Enter a reply of 1 to 4,000 characters.' } : {} })
+  const validation = useFormValidation({ fields: [{ name: 'body', label: 'Reply', ref }], validate: () => !bodyRef.current.trim() || bodyRef.current.trim().length > 4000 ? { body: 'Enter a reply of 1 to 4,000 characters.' } : {} })
   const seen = useRef(record?.state)
-  useEffect(() => { if (record?.state === 'committed' && seen.current !== 'committed') setBody(''); seen.current = record?.state }, [record?.state])
+  useEffect(() => {
+    if (record?.state === 'committed' && seen.current !== 'committed') { bodyRef.current = ''; setBody('') }
+    seen.current = record?.state
+  }, [record?.state])
   const pending = record?.state === 'pending', uncertain = record?.state === 'uncertain'
-  return <form className="employee-reply" noValidate onSubmit={(event) => { event.preventDefault(); if (!disabled && !pending && (uncertain || validation.submit())) void store.send({ kind: 'COMMENT', taskId: task.id, body: body.trim() }, onSessionInvalid) }}><TextareaField ref={ref} label="Reply" value={body} maxLength={4000} disabled={disabled || pending || uncertain} placeholder="Add a helpful update…" error={validation.errors.body || record?.fields?.body} onChange={(event) => { setBody(event.target.value); validation.clear() }} /><Button type="submit" busy={pending} disabled={disabled}>{uncertain ? 'Retry' : 'Post reply'}</Button>{record?.error && <><p className="ui-error">{record.error}</p><AnnounceEvent event={{ id: `${record.id}:${record.state}`, message: record.error, intent: 'alert' }} /></>}</form>
+  return <form className="employee-reply" noValidate onSubmit={(event) => { event.preventDefault(); if (!disabled && !pending && (uncertain || validation.submit())) void store.send({ kind: 'COMMENT', taskId: task.id, body: body.trim() }, onSessionInvalid) }}><TextareaField ref={ref} label="Reply" value={body} maxLength={4000} disabled={disabled} {...pendingTextProps(pending || uncertain)} placeholder="Add a helpful update…" error={validation.errors.body || record?.fields?.body} onChange={(event) => { bodyRef.current = event.target.value; setBody(event.target.value); validation.revalidate('body') }} /><Button type="submit" busy={pending} disabled={disabled}>{uncertain ? 'Retry' : 'Post reply'}</Button>{record?.error && <><p className="ui-error">{record.error}</p><AnnounceEvent event={{ id: `${record.id}:${record.state}`, message: record.error, intent: 'alert' }} /></>}</form>
 }

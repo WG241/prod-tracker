@@ -11,14 +11,16 @@ export function displayTime(value: string) {
   return new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) + ' WAT'
 }
 export function isoWeek(value: string) {
-  const date = new Date(`${value}T12:00:00Z`)
+  // Match midnight with the January 4 reference so Math.round cannot gain a half day
+  // in ISO years that start on Friday (for example 2027).
+  const date = new Date(`${value}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + 3 - (date.getUTCDay() + 6) % 7)
   const year = new Date(0)
   year.setUTCFullYear(date.getUTCFullYear(), 0, 4)
   return 1 + Math.round((date.getTime() - year.getTime()) / 86400000 / 7)
 }
 export function isoWeekYear(value: string) {
-  const date = new Date(`${value}T12:00:00Z`)
+  const date = new Date(`${value}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + 3 - (date.getUTCDay() + 6) % 7)
   return String(date.getUTCFullYear()).padStart(4, '0')
 }

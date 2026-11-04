@@ -3,6 +3,17 @@ import type { ReadClock } from './contracts.ts'
 
 class ReadFailure extends Error {}
 
+export const EMPLOYEE_READ_TIMEOUT_MS = 20_000
+
+/** Bounded fetch init so a stalled HTTP body reaches Retry instead of loading forever. */
+export function employeeReadInit(signal: AbortSignal, timeoutMs = EMPLOYEE_READ_TIMEOUT_MS): RequestInit {
+  return {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
+    credentials: 'same-origin',
+    cache: 'no-store',
+  }
+}
+
 export function useEmployeeRead<T extends ReadClock>(url: string | null, onSessionInvalid: () => void) {
   const [result, setResult] = useState<{ url: string | null; data: T | null; loading: boolean; error: string; stale: boolean }>({ url: null, data: null, loading: true, error: '', stale: false })
   const [revision, setRevision] = useState(0)
@@ -18,7 +29,7 @@ export function useEmployeeRead<T extends ReadClock>(url: string | null, onSessi
       if (controller.signal.aborted) return
       setResult((old) => ({ url, data: old.url === url ? old.data : null, loading: true, error: '', stale: old.url === url && !!old.data }))
       try {
-        const response = await fetch(url, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store' })
+        const response = await fetch(url, employeeReadInit(controller.signal))
         if (controller.signal.aborted || sequence.current !== version) return
         if (response.status === 401 || response.status === 403) {
           setResult({ url, data: null, loading: false, error: '', stale: false })
@@ -29,7 +40,8 @@ export function useEmployeeRead<T extends ReadClock>(url: string | null, onSessi
         const data = await response.json() as T
         if (!controller.signal.aborted && sequence.current === version) setResult({ url, data, loading: false, error: '', stale: false })
       } catch (error) {
-        if (!controller.signal.aborted && sequence.current === version) setResult((old) => ({ ...old, loading: false, stale: !!old.data, error: error instanceof ReadFailure ? error.message : 'The service is unavailable. Please try again.' }))
+        const aborted = error instanceof DOMException && error.name === 'AbortError'
+        if (!aborted && sequence.current === version) setResult((old) => ({ ...old, loading: false, stale: !!old.data, error: error instanceof ReadFailure ? error.message : 'The service is unavailable. Please try again.' }))
       }
     })()
     return () => controller.abort()

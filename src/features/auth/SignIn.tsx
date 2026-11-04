@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { Button, IconButton } from '../../components/ui/Button.tsx'
@@ -21,6 +21,7 @@ export function SignIn({ notice = '' }: { notice?: string }) {
   const retry = useRetryDelay()
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+  const passwordId = useId()
   const inFlight = useRef(false)
   const attempt = useRef(0)
   const announce = useAnnounce()
@@ -95,9 +96,26 @@ export function SignIn({ notice = '' }: { notice?: string }) {
         {notice && <><p className="auth-banner">{notice}</p><AnnounceEvent event={{ id: `sign-in-notice:${notice}`, message: notice, intent: 'status' }} /></>}
         <form onSubmit={(event) => void submit(event)} noValidate aria-busy={busy}>
           <InputField ref={emailRef} label="Work email" type="email" name="email" autoComplete="username" required maxLength={254} readOnly={busy} error={validation.errors.email} onChange={() => validation.revalidate('email')} />
-          <div className="auth-password">
-            <InputField ref={passwordRef} label="Password" type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" required maxLength={256} readOnly={busy} error={validation.errors.password} onChange={() => validation.revalidate('password')} />
-            <IconButton label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</IconButton>
+          <div className="ui-field">
+            <label htmlFor={passwordId}>Password</label>
+            <div className="auth-password">
+              <input
+                ref={passwordRef}
+                id={passwordId}
+                className="ui-control"
+                type={visible ? 'text' : 'password'}
+                name="password"
+                autoComplete="current-password"
+                required
+                maxLength={256}
+                readOnly={busy}
+                aria-invalid={validation.errors.password ? true : undefined}
+                aria-describedby={validation.errors.password ? `${passwordId}-error` : undefined}
+                onChange={() => validation.revalidate('password')}
+              />
+              <IconButton label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</IconButton>
+            </div>
+            {validation.errors.password && <p className="ui-error" id={`${passwordId}-error`}>{validation.errors.password}</p>}
           </div>
           <div className="auth-recovery">
             <Button type="button" variant="ghost" size="small" onClick={() => setRecoverySoonOpen(true)}>Forgot password?</Button>

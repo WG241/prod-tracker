@@ -4,6 +4,7 @@ import { CheckboxField, InputField, SelectField, TextareaField } from '../../com
 import { Dialog } from '../../components/ui/Dialog.tsx'
 import { useFormValidation } from '../../components/accessibility/useFormValidation.ts'
 import { displayDate, isoWeek, rangeError, shiftDate } from './date.ts'
+import { pendingTextProps } from './pending-fields.ts'
 import type { TaskDraft, WorkingStatus } from './mutations.ts'
 import type { TaskEntry } from './contracts.ts'
 import type { RefObject } from 'react'
@@ -19,6 +20,7 @@ export function TaskForm({ week, task, initial, pending, error, fields: serverFi
     status: ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(task.status) ? task.status as WorkingStatus : 'PENDING',
     ...(task.status === 'BLOCKED' && task.reason ? { blockerReason: task.reason } : {}),
   } : { title: '', activity: '', startsOn: week, endsOn: friday, carryRequested: false }))
+  const draftRef = useRef(draft)
   const titleRef = useRef<HTMLInputElement>(null), activityRef = useRef<HTMLTextAreaElement>(null), startRef = useRef<HTMLInputElement>(null), endRef = useRef<HTMLInputElement>(null)
   const carryRef = useRef<HTMLInputElement>(null), reportedFields = useRef<Record<string, string> | undefined>(undefined)
   const formId = useId()
@@ -26,19 +28,22 @@ export function TaskForm({ week, task, initial, pending, error, fields: serverFi
   const requiredCarry = datesChanged && draft.endsOn > friday
   const planning = !task || task.permissions.planningFieldsEditable
   const frozenInput = pending || uncertain
+  const textLock = pendingTextProps(frozenInput)
   const validation = useFormValidation({ fields: [
     { name: 'title', label: 'Task title', ref: titleRef }, { name: 'activity', label: 'Activity', ref: activityRef },
     { name: 'startsOn', label: 'Start date', ref: startRef }, { name: 'endsOn', label: 'End date', ref: endRef },
     { name: 'carryRequested', label: 'Carry into next week', ref: carryRef },
   ], validate: () => {
+    const current = draftRef.current
     const next: Record<string, string> = {}
-    if (!draft.title.trim() || draft.title.trim().length > 120) next.title = 'Enter a task title of 1 to 120 characters.'
-    if (!draft.activity.trim() || draft.activity.trim().length > 6000) next.activity = 'Enter activity of 1 to 6,000 characters.'
-    if (datesChanged) {
-      const dateErrors = rangeError(draft.startsOn, draft.endsOn)
+    const changed = !task || current.startsOn !== task.startsOn || current.endsOn !== task.endsOn
+    if (!current.title.trim() || current.title.trim().length > 120) next.title = 'Enter a task title of 1 to 120 characters.'
+    if (!current.activity.trim() || current.activity.trim().length > 6000) next.activity = 'Enter activity of 1 to 6,000 characters.'
+    if (changed) {
+      const dateErrors = rangeError(current.startsOn, current.endsOn)
       if (dateErrors.from) next.startsOn = dateErrors.from
       if (dateErrors.to) next.endsOn = dateErrors.to
-      if (draft.startsOn < week || draft.startsOn > friday) next.startsOn = 'Choose a start date from this Monday to Friday.'
+      if (current.startsOn < week || current.startsOn > friday) next.startsOn = 'Choose a start date from this Monday to Friday.'
     }
     return next
   } })
@@ -51,8 +56,10 @@ export function TaskForm({ week, task, initial, pending, error, fields: serverFi
   useEffect(() => { if (serverFields && reportedFields.current !== serverFields) { reportedFields.current = serverFields; validation.reportErrors(serverFields) } }, [serverFields, validation])
   const errors = { ...validation.errors, ...serverFields }
   function change<K extends keyof TaskDraft>(key: K, value: TaskDraft[K]) {
-    setDraft((old) => ({ ...old, [key]: value, ...(key === 'endsOn' && String(value) > friday ? { carryRequested: true } : {}) }))
-    validation.clear()
+    const next = { ...draftRef.current, [key]: value, ...(key === 'endsOn' && String(value) > friday ? { carryRequested: true } : {}) }
+    draftRef.current = next
+    setDraft(next)
+    if (key === 'title' || key === 'activity' || key === 'startsOn' || key === 'endsOn' || key === 'carryRequested') validation.revalidate(key)
   }
   return <Dialog open title={task ? 'Edit task' : 'Add a task'} onClose={onClose} returnFocusRef={returnFocusRef} footer={<>
     {conflict && <Button onClick={onReload}>Reload latest</Button>}
@@ -61,9 +68,9 @@ export function TaskForm({ week, task, initial, pending, error, fields: serverFi
   </>}>
     <p className="employee-muted employee-form-intro">A clear outcome, and the work you’ll do to achieve it.</p>
     <form id={formId} noValidate onSubmit={(event) => { event.preventDefault(); if (!pending && !uncertain && !conflict && validation.submit()) onSubmit({ ...draft, carryRequested: requiredCarry || draft.carryRequested }) }}>
-      <InputField label="Task title" required maxLength={120} ref={titleRef} value={draft.title} disabled={!planning || frozenInput} onChange={(e) => change('title', e.target.value)} error={errors.title} />
-      <TextareaField label="Activity" required maxLength={6000} ref={activityRef} value={draft.activity} disabled={frozenInput} onChange={(e) => change('activity', e.target.value)} error={errors.activity} />
-      <div className="employee-form-grid"><InputField label="Start date" type="date" required min={week} max={friday} ref={startRef} value={draft.startsOn} disabled={!planning || frozenInput} onChange={(e) => change('startsOn', e.target.value)} error={errors.startsOn} /><InputField label="End date" type="date" required min={draft.startsOn} max="9999-12-31" ref={endRef} value={draft.endsOn} disabled={!planning || frozenInput} onChange={(e) => change('endsOn', e.target.value)} error={errors.endsOn} /></div>
+      <InputField label="Task title" required maxLength={120} ref={titleRef} value={draft.title} disabled={!planning} {...textLock} onChange={(e) => change('title', e.target.value)} error={errors.title} />
+      <TextareaField label="Activity" required maxLength={6000} ref={activityRef} value={draft.activity} {...textLock} onChange={(e) => change('activity', e.target.value)} error={errors.activity} />
+      <div className="employee-form-grid"><InputField label="Start date" type="date" required min={week} max={friday} ref={startRef} value={draft.startsOn} disabled={!planning} {...textLock} onChange={(e) => change('startsOn', e.target.value)} error={errors.startsOn} /><InputField label="End date" type="date" required min={draft.startsOn} max="9999-12-31" ref={endRef} value={draft.endsOn} disabled={!planning} {...textLock} onChange={(e) => change('endsOn', e.target.value)} error={errors.endsOn} /></div>
       <CheckboxField ref={carryRef} label="Carry into next week" error={serverFields?.carryRequested} checked={requiredCarry || draft.carryRequested} disabled={!planning || requiredCarry || frozenInput} onChange={(e) => change('carryRequested', e.target.checked)} />
       {(requiredCarry || draft.carryRequested) && nextWeek && carryEnd && <p className="employee-carry-hint">Week {isoWeek(nextWeek)}, {carryDays} working {carryDays === 1 ? 'day' : 'days'}, {displayDate(nextWeek)} to {displayDate(carryEnd)}{requiredCarry && '. Carry over is required for this end date.'}</p>}
       {task && <SelectField label="Status" value={draft.status} disabled={frozenInput} onChange={(e) => change('status', e.target.value as WorkingStatus)}><option value="PENDING">Pending</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="COMPLETED" disabled={task.status === 'AWAITING_APPROVAL'}>Completed</option></SelectField>}

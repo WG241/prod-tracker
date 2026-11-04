@@ -5,6 +5,7 @@ import { Card } from '../../components/ui/Card.tsx'
 import { Button } from '../../components/ui/Button.tsx'
 import { Badge } from '../../components/ui/Badge.tsx'
 import { InputField } from '../../components/ui/Field.tsx'
+import { Skeleton, SkeletonCircle, SkeletonForm, SkeletonText } from '../../components/ui/Skeleton.tsx'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 import { useFormValidation } from '../../components/accessibility/useFormValidation.ts'
 import { useEmployeeRead } from './useEmployeeRead.ts'
@@ -13,6 +14,7 @@ import { leaveDraftErrors } from './leave-contracts.ts'
 import type { LeaveResponse, LeaveView } from './leave-contracts.ts'
 import { useLeaveOperations } from './leave-operations.ts'
 import type { LeaveOperations } from './leave-operations.ts'
+import { pendingTextProps } from './pending-fields.ts'
 import './employee.css'
 
 export function LeaveFeedback({ operations, onRetry, onReload }: { operations: LeaveOperations; onRetry: () => void; onReload: () => void }) {
@@ -61,7 +63,11 @@ export function EmployeeLeave({ state, onState, headingRef, onSessionInvalid, op
   return <>
     <header className="employee-heading"><div><h1 ref={headingRef} tabIndex={-1}>Time to recharge</h1><p>Set your dates. Your manager and HR will be kept informed.</p></div></header>
     <LeaveFeedback operations={store} onRetry={retry} onReload={reload} />
-    {read.loading && <><p className="employee-read-message">Loading leave…</p><AnnounceEvent event={{ id: 'leave-loading', message: 'Loading leave…', intent: 'status' }} /></>}
+    {read.loading && !data && <div className="employee-leave-columns" aria-busy="true">
+      <Card title="I’m going on leave"><SkeletonForm fields={2} /><Skeleton className="skeleton-button" style={{ marginTop: 36 }} /></Card>
+      <Card><SkeletonText width="medium" /><div style={{ display: 'grid', gap: 18, marginTop: 18 }}>{Array.from({ length: 3 }, (_, i) => <div key={i} className="employee-leave-notice"><SkeletonCircle size={18} /><SkeletonText width="long" /></div>)}</div></Card>
+    </div>}
+    {read.loading && <AnnounceEvent event={{ id: 'leave-loading', message: 'Loading leave…', intent: 'status' }} />}
     {read.error && <div className="employee-banner employee-amber"><p>{savedRefresh ? 'Your change was saved, but the latest leave state could not be loaded. ' : ''}{read.error}</p><Button onClick={read.retry}>Retry</Button><AnnounceEvent event={{ id: `leave-read:${read.error}`, message: read.error, intent: 'alert' }} /></div>}
     {data && <div className="employee-leave-columns" aria-busy={read.loading || undefined}>
       <Card title={data.current ? 'Your leave dates' : 'I’m going on leave'} actions={data.current && <Badge status={data.state === 'SCHEDULED' ? 'Scheduled' : 'On leave'} />}>
@@ -70,7 +76,7 @@ export function EmployeeLeave({ state, onState, headingRef, onSessionInvalid, op
           <p className="employee-muted employee-leave-explanation">{data.state === 'SCHEDULED' ? 'Your tracker remains active until your leave starts.' : 'Your tracker is paused. Full leave weeks are excluded from expected submission; partial weeks keep their available workdays.'}</p>
           <Button variant="primary" disabled={disabled} busy={record?.state === 'pending'} onClick={() => data.current && void store.send({ kind: data.current.canCancel ? 'CANCEL' : 'RETURN', leaveId: data.current.id }, onSessionInvalid)}>{data.current.canCancel ? 'Cancel leave' : 'I’m back — end leave now'}</Button>
         </> : <form noValidate onSubmit={(event) => { event.preventDefault(); if (!disabled && data.canCreate && form.submit()) void store.send({ kind: 'CREATE', draft }, onSessionInvalid) }}>
-          <div className="employee-form-grid"><InputField ref={startRef} label="Start date" type="date" min={data.today} max={data.bounds.latestStartOn} required value={draft.startsOn} disabled={store.busy} error={form.errors.startsOn} onChange={(e) => { onState({ ...state, draft: { startsOn: e.target.value, expectedReturnOn: ends } }); form.revalidate('startsOn') }} /><InputField ref={endRef} label="Expected return date" type="date" min={starts} max="9999-12-31" required value={draft.expectedReturnOn} disabled={store.busy} error={form.errors.expectedReturnOn} onChange={(e) => { onState({ ...state, draft: { startsOn: starts, expectedReturnOn: e.target.value } }); form.revalidate('expectedReturnOn') }} /></div>
+          <div className="employee-form-grid"><InputField ref={startRef} label="Start date" type="date" min={data.today} max={data.bounds.latestStartOn} required value={draft.startsOn} {...pendingTextProps(store.busy)} error={form.errors.startsOn} onChange={(e) => { onState({ ...state, draft: { startsOn: e.target.value, expectedReturnOn: ends } }); form.revalidate('startsOn') }} /><InputField ref={endRef} label="Expected return date" type="date" min={starts} max="9999-12-31" required value={draft.expectedReturnOn} {...pendingTextProps(store.busy)} error={form.errors.expectedReturnOn} onChange={(e) => { onState({ ...state, draft: { startsOn: starts, expectedReturnOn: e.target.value } }); form.revalidate('expectedReturnOn') }} /></div>
           {!data.canCreate && <p className="ui-error">Leave dates are unavailable. Please contact HR.</p>}
           <Button className="employee-leave-confirm" variant="primary" type="submit" busy={record?.state === 'pending'} disabled={disabled || !data.canCreate}>Confirm leave</Button>
         </form>}

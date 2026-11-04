@@ -22,6 +22,17 @@ test('AC-3 WAT weeks cross Sunday at 23:00 UTC and ISO weeks cross years', () =>
   assert.equal(shiftDate('9999-12-27', 7), null)
 })
 
+test('isoWeek keeps matching midnight anchors so Friday-start ISO years are not one ahead', () => {
+  // 2027 starts on Friday; noon vs midnight Jan 4 previously made Math.round advance every week label.
+  assert.equal(isoWeek('2027-01-04'), 1)
+  assert.equal(isoWeek('2027-01-11'), 2)
+  assert.equal(isoWeek('2027-06-14'), 24)
+  assert.equal(isoWeek('2027-12-27'), 52)
+  assert.equal(isoWeekYear('2027-01-04'), '2027')
+  assert.equal(isoWeek('2026-01-01'), 1)
+  assert.equal(isoWeek('2028-01-03'), 1)
+})
+
 test('AC-3 only real four digit dates and valid, exclusive selections are accepted', () => {
   assert.equal(parseDay('0001-01-01').getUTCFullYear(), 1)
   assert.equal(parseDay('2024-02-29').toISOString().slice(0, 10), '2024-02-29')

@@ -24,7 +24,11 @@ function Host({ children, modal = false, active = true }: { children: ReactNode;
     return () => { cancelled = true; bus.remove(id); cancelAnimationFrame(first); cancelAnimationFrame(second) }
   }, [active, bus, id, modal])
   useEffect(() => {
-    if (!active || !events.length) return
+    if (!active) return
+    if (!events.length) {
+      const clear = window.setTimeout(() => setSpoken(null), 1000)
+      return () => window.clearTimeout(clear)
+    }
     const clear = window.setTimeout(() => setSpoken(null), 0)
     const timer = window.setTimeout(() => {
       setSpoken(events[0])

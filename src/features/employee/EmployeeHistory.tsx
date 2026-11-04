@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge.tsx'
 import { Button } from '../../components/ui/Button.tsx'
 import { SelectField } from '../../components/ui/Field.tsx'
 import { Table } from '../../components/ui/Table.tsx'
+import { SkeletonTable } from '../../components/ui/Skeleton.tsx'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 import { taskStatuses } from './contracts.ts'
 import { displayDate, displayTime, isoWeek, isoWeekYear } from './date.ts'
@@ -42,7 +43,8 @@ export function EmployeeHistory({ state, onState, headingRef, onSessionInvalid, 
     </div>
     {data && (data.availability.pendingWeeks > 0 || data.availability.repairWeeks > 0 || !data.availability.captureInitialized) && <div className="employee-banner employee-gray"><p>{data.availability.pendingWeeks > 0 && `${data.availability.pendingWeeks} ${data.availability.pendingWeeks === 1 ? 'week is' : 'weeks are'} still being prepared. `}{data.availability.repairWeeks > 0 && `${data.availability.repairWeeks} ${data.availability.repairWeeks === 1 ? 'week needs' : 'weeks need'} historical repair. Contact HR. `}{!data.availability.captureInitialized && 'Automatic history capture has not started. Existing valid records remain available.'}</p><Button size="small" onClick={read.retry}>Retry</Button></div>}
     <section className="ui-card employee-history-card" aria-busy={read.loading || undefined}>
-      {read.loading && <><p className="employee-read-message">Loading history…</p><AnnounceEvent event={{ id: `history-loading:${params}`, message: 'Loading history…', intent: 'status' }} /></>}
+      {read.loading && !data && <div className="ui-card-body"><SkeletonTable rows={8} cols={4} /></div>}
+      {read.loading && <AnnounceEvent event={{ id: `history-loading:${params}`, message: 'Loading history…', intent: 'status' }} />}
       {read.error && <div className="employee-banner employee-amber"><p>{read.error}</p><Button size="small" onClick={read.retry}>Retry</Button><AnnounceEvent event={{ id: `history-error:${params}:${read.error}`, message: read.error, intent: 'alert' }} /></div>}
       {data && <>
         {read.stale && <p className="employee-read-message">This history may be out of date. Last loaded {displayTime(data.asOf)}.</p>}

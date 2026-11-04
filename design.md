@@ -18,7 +18,7 @@ Values live in `src/global.css` under `@theme` and `:root`. Component and shell 
 
 Use Inter weights 400, 500, 600, and 700 with system fallback. The Google font import precedes Tailwind, eliminating the old import order warning. Body text is 14px, secondary text 12px or 13px, headings 18px and at most 28px. Headings use the final prototype's semibold weight. Retain the documented micro and caption sizes in shell details.
 
-Use brand, neutral, status, avatar, radius, shadow, spacing, motion and layout tokens by name. `--color-control-border` is the accessible border for enabled outlined buttons and fields. Declined and On hold tokens preserve the original orange and purple status families. `--dialog-backdrop` defines the prototype's translucent dark overlay.
+Use brand, neutral, status, avatar, radius, shadow, spacing, motion and layout tokens by name. `--color-control-border` matches the prototype light border for enabled outlined buttons and fields (`#d1d5db`). Declined and On hold tokens preserve the original orange and purple status families. `--dialog-backdrop` defines the prototype's translucent dark overlay.
 
 ## Composition and responsive behavior
 

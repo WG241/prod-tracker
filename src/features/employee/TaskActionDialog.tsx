@@ -12,6 +12,7 @@ import type { TaskDraft, TaskOperation } from './mutations.ts'
 import { TaskForm } from './TaskForm.tsx'
 import { useTaskOperations } from './operations.ts'
 import type { TaskOperations } from './operations.ts'
+import { pendingTextProps } from './pending-fields.ts'
 
 export type ActionSelection = { kind: TaskAction | 'CREATE'; task?: TaskEntry; week: string }
 export function TaskActionDialog({ selection, operations, onClose, onReload, onSessionInvalid, returnFocusRef, onNext }: {
@@ -27,11 +28,12 @@ export function TaskActionDialog({ selection, operations, onClose, onReload, onS
   const [draft, setDraft] = useState<TaskDraft | undefined>(prior && (prior.kind === 'CREATE' || prior.kind === 'EDIT') ? prior.draft : undefined)
   const [step, setStep] = useState<'form' | 'confirm' | 'blocker' | 'next'>(() => kind === 'EDIT' || kind === 'CREATE' ? 'form' : kind === 'BLOCKED' ? 'blocker' : 'confirm')
   const [reason, setReason] = useState(prior && (prior.kind === 'STATUS' || prior.kind === 'EDIT') ? (prior.kind === 'EDIT' ? prior.draft.blockerReason : prior.blockerReason) ?? '' : task?.status === 'BLOCKED' ? task.reason ?? '' : '')
+  const reasonValue = useRef(reason)
   const reasonRef = useRef<HTMLTextAreaElement>(null)
   const submitted = useRef(unresolved)
   const pending = record?.state === 'pending', uncertain = record?.state === 'uncertain'
   const conflict = record?.state === 'rejected' && ['STALE_TASK', 'WEEK_CHANGED'].includes(record.code)
-  const validation = useFormValidation({ fields: [{ name: 'blockerReason', label: 'Reason', ref: reasonRef }], validate: () => !reason.trim() || reason.trim().length > 2000 ? { blockerReason: 'Enter a reason of 1 to 2,000 characters.' } : {} })
+  const validation = useFormValidation({ fields: [{ name: 'blockerReason', label: 'Reason', ref: reasonRef }], validate: () => !reasonValue.current.trim() || reasonValue.current.trim().length > 2000 ? { blockerReason: 'Enter a reason of 1 to 2,000 characters.' } : {} })
   useEffect(() => {
     if (!submitted.current || record?.state !== 'committed') return
     submitted.current = false
@@ -64,7 +66,7 @@ export function TaskActionDialog({ selection, operations, onClose, onReload, onS
   return <Dialog open size="small" title={title} onClose={back} returnFocusRef={returnFocusRef} footer={<>
     {conflict && <Button onClick={() => { store.discard(key); onReload() }}>Reload latest</Button>}<Button onClick={back}>Cancel</Button><Button variant={kind === 'DELETE' ? 'danger' : 'primary'} busy={pending} disabled={conflict} onClick={() => { if (step !== 'blocker' || unresolved || validation.submit()) confirm() }}>{uncertain ? 'Retry' : step === 'blocker' ? 'Save blocker' : kind === 'DELETE' ? 'Delete task' : completing ? 'Mark completed' : 'Save'}</Button>
   </>}>
-    {step === 'blocker' ? <TextareaField label="Reason" ref={reasonRef} maxLength={2000} value={reason} disabled={pending || uncertain} error={validation.errors.blockerReason || record?.fields?.blockerReason} onChange={(event) => { setReason(event.target.value); validation.clear() }} /> : <p>{kind === 'DELETE' ? 'This task will be removed from your weekly tracker. This cannot be undone.' : completing ? 'This will be sent to your line manager for approval.' : kind === 'CARRY' ? 'Your next week record will be updated.' : 'Keep your task status up to date.'}</p>}
+    {step === 'blocker' ? <TextareaField label="Reason" ref={reasonRef} maxLength={2000} value={reason} {...pendingTextProps(pending || uncertain)} error={validation.errors.blockerReason || record?.fields?.blockerReason} onChange={(event) => { reasonValue.current = event.target.value; setReason(event.target.value); validation.revalidate('blockerReason') }} /> : <p>{kind === 'DELETE' ? 'This task will be removed from your weekly tracker. This cannot be undone.' : completing ? 'This will be sent to your line manager for approval.' : kind === 'CARRY' ? 'Your next week record will be updated.' : 'Keep your task status up to date.'}</p>}
     {record?.error && <><p className="ui-error">{record.error}</p><AnnounceEvent event={{ id: `${record.id}:${record.state}`, message: record.error, intent: 'alert' }} /></>}
   </Dialog>
 }

@@ -37,15 +37,17 @@
 .employee-tracker-pill { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; font-size: var(--text-sm); font-weight: 600; line-height: 1; padding: 5px 12px; border-radius: var(--radius-pill); letter-spacing: .1px; margin-left: 8px; white-space: nowrap; }
 .employee-tracker-pill svg { width: 13px; height: 13px; }
 .employee-tracker-pill.open { background: var(--color-open-bg); color: var(--color-open-fg); border: 1px solid var(--color-open-border); }
-.employee-tracker-pill.closed { background: var(--color-warning-bg); color: var(--color-warning-fg); border: 1px solid var(--color-warning-border); }
+.employee-tracker-pill.closed { background: var(--color-warning-bg); color: var(--color-warning-fg); border: 1px solid var(--color-warning-border); font-weight: 500; font-size: 11px; }
 .employee-week-controls { display: flex; align-items: center; gap: 4px; background: var(--color-surface); border: 1px solid var(--color-line); padding: 5px; border-radius: var(--radius-2xl); min-height: 60px; flex-shrink: 0; }
 .employee-period-label { text-align: center; min-width: 185px; }
 .employee-period-label b { display: block; font-size: var(--text-base); }
 .employee-period-label small { display: block; font-size: var(--text-xs); color: var(--color-muted); }
 .employee-this-week { border: 0; border-left: 1px solid var(--color-line); padding: 0 12px; color: var(--color-gray-600); font-size: var(--text-sm); background: transparent; min-height: 40px; }
 .employee-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.employee-actions .ui-button { padding-top: 10px; padding-bottom: 10px; }
 .employee-view-switch { display: inline-flex; gap: 3px; background: var(--color-surface-tint); border-radius: var(--radius-lg); padding: 3px; }
 .employee-view-switch button { display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--radius-sm); padding: 5px 10px; min-height: 32px; color: var(--color-gray-600); background: transparent; font-size: var(--text-sm); }
+.employee-view-switch button:nth-child(2) { font-size: 10px; }
 .employee-view-switch button[aria-pressed="true"] { color: var(--color-gray-700); background: var(--color-surface); box-shadow: var(--shadow-xs); }
 .employee-view-switch svg { width: 14px; height: 14px; }
 .employee-banner { padding: 13px 16px; border-radius: var(--radius-xl); display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; font-size: var(--text-md); border: 1px solid var(--color-line); overflow-wrap: anywhere; }
@@ -64,13 +66,13 @@
 .employee-attention-item p { font-size: var(--text-sm); color: var(--color-muted); margin-top: 3px; overflow-wrap: anywhere; }
 .employee-week-card > .ui-card-body { padding: 4px 22px; }
 .employee-tasks { display: flex; flex-direction: column; }
-.employee-task { display: flex; gap: 20px; align-items: center; padding: 23px 0; border-bottom: 1px solid var(--color-line-soft); min-width: 0; }
+.employee-task { display: flex; gap: 20px; align-items: flex-start; padding: 23px 0; border-bottom: 1px solid var(--color-line-soft); min-width: 0; }
 .employee-task:last-child { border-bottom: 0; }
 .employee-task-open { border: 0; background: transparent; display: flex; gap: 15px; align-items: flex-start; flex: 1; padding: 0; text-align: left; color: inherit; min-width: 0; border-radius: var(--radius-sm); }
 .employee-task-content { min-width: 0; flex: 1; }
-.employee-task-open h3 { font-size: var(--text-base); font-weight: 500; line-height: 1.65; overflow-wrap: anywhere; }
+.employee-task-content h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-base); font-weight: 500; line-height: 1.65; }
+.employee-task-date { color: var(--color-muted); font-size: 10px; white-space: nowrap; }
 .employee-task-open p { font-size: var(--text-sm); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 64ch; margin: 5px 0 10px; }
-.employee-task-open small { color: var(--color-muted); font-size: var(--text-sm); }
 .employee-task-check { margin-top: 3px; border-radius: 50%; background: var(--color-surface-subtle); color: var(--color-blue); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .employee-task-check svg { width: 18px; height: 18px; }
 .employee-status-PENDING, .employee-status-CANCELLED { color: var(--color-muted); }
@@ -79,15 +81,17 @@
 .employee-status-DECLINED { color: var(--color-declined-fg); }
 .employee-status-ON_HOLD { color: var(--color-hold-fg); }
 .employee-status-AWAITING_APPROVAL { color: var(--color-amber); }
-.employee-task-side { display: flex; align-items: center; gap: 15px; }
+.employee-task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.employee-task-side-top { display: flex; align-items: center; gap: 8px; }
 .employee-task-flags { display: flex; gap: 10px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--color-amber); }
 .employee-task-flags > span { display: flex; align-items: center; gap: 4px; margin-bottom: 7px; }
 .employee-task-flags svg { width: 13px; height: 13px; }
 .employee-task-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 20px 0; }
 .employee-task-grid .employee-task { border: 1px solid var(--color-line); border-radius: var(--radius-4xl); flex-direction: column; align-items: stretch; padding: 20px; gap: 20px; }
 .employee-task-grid .employee-task-check { display: none; }
+.employee-task-grid .employee-task-content h3 { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
 .employee-task-grid .employee-task-open p { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 38px; overflow-wrap: anywhere; }
-.employee-task-grid .employee-task-side { justify-content: space-between; border-top: 1px solid var(--color-line-soft); padding-top: 14px; }
+.employee-task-grid .employee-task-side { flex-direction: row; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-line-soft); padding-top: 14px; }
 .employee-week-bottom { border-top: 1px solid var(--color-line); padding: 14px 22px; display: flex; align-items: center; gap: 8px; color: var(--color-muted); font-size: var(--text-sm); }
 .employee-week-bottom svg, .employee-support svg { width: 15px; height: 15px; flex-shrink: 0; }
 .employee-support { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; color: var(--color-muted); font-size: var(--text-sm); gap: 15px; }
@@ -104,8 +108,10 @@
 .employee-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
 .employee-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .employee-panel-status { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.employee-panel-status .ui-badge { font-size: 11px; padding: 3px 8px; }
 .employee-panel-status .ui-field { margin: 0; max-width: 174px; }
 .employee-panel-status .ui-field label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.employee-panel-status .employee-status-select { font-size: 11px; padding-top: 10px; padding-bottom: 10px; padding-left: 12px; padding-right: calc(5px + 14px + 5px); min-height: auto; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: calc(100% - 5px) center; background-size: 14px 14px; }
 .employee-detail-title { font-size: var(--text-4xl); line-height: 1.4; letter-spacing: -.5px; margin: 16px 0; overflow-wrap: anywhere; }
 .employee-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--color-line); margin-bottom: 24px; }
 .employee-detail-meta dt { display: block; color: var(--color-muted); font-size: var(--text-xs); margin-bottom: 5px; }
@@ -131,12 +137,14 @@
   .employee-week-controls .ui-button { font-size: var(--text-caption); padding: 4px; gap: 4px; }
   .employee-week-controls .ui-button svg { width: 13px; height: 13px; }
   .employee-this-week { font-size: var(--text-caption); padding: 0 6px; }
-  .employee-task { padding: 19px 0; flex-wrap: wrap; }
-  .employee-task-open h3 { font-size: var(--text-md); }
+  .employee-task { padding: 19px 0; flex-wrap: wrap; position: relative; }
+  .employee-task-content h3 { font-size: var(--text-md); }
   .employee-task-open p { max-width: 32ch; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .employee-task-side { width: 100%; justify-content: space-between; margin-left: 47px; }
+  .employee-task-side { width: 100%; justify-content: flex-start; align-items: flex-start; margin-left: 47px; }
+  .employee-task-side .employee-menu { position: absolute; top: 19px; right: 0; }
   .employee-task-grid { grid-template-columns: 1fr; }
   .employee-task-grid .employee-task-side { margin-left: 0; }
+  .employee-task-grid .employee-task-side .employee-menu { position: static; }
   .employee-attention .ui-card-head { padding: 16px; flex-wrap: nowrap; }
   .employee-attention-title { min-width: 0; gap: 8px; }
   .employee-attention-title h2 { font-size: var(--text-xl); }

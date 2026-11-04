@@ -163,7 +163,7 @@ test('AC10 same actor foreground revalidation hides private content and retains 
     const gate = new Promise<void>((resolve) => { release = resolve }), ready = new Promise<void>((resolve) => { reached = resolve })
     await page.route('**/api/session', async (route) => { reached(); await gate; await route.continue() })
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await ready
-    await page.getByText('Loading workspace…').waitFor()
+    await page.getByRole('status', { name: 'Loading workspace…' }).waitFor()
     assert.equal(await page.getByLabel('Start date', { exact: true }).count(), 0)
     release(); await page.getByRole('button', { name: 'Confirm leave' }).waitFor()
     assert.equal(await page.getByLabel('Start date', { exact: true }).inputValue(), date(4))

@@ -3,6 +3,7 @@ import type { RefObject } from 'react'
 import { ArrowRight, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Grid2X2, Hourglass, Info, List, LockKeyhole, LockKeyholeOpen, OctagonAlert, Pause, Plus, Repeat2, Umbrella, Undo2, X } from 'lucide-react'
 import { Button, IconButton } from '../../components/ui/Button.tsx'
 import { Badge } from '../../components/ui/Badge.tsx'
+import { SkeletonTaskList } from '../../components/ui/Skeleton.tsx'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 import type { EmployeeView, HomeResponse, Selection, TaskEntry } from './contracts.ts'
 import { taskStatuses } from './contracts.ts'
@@ -22,11 +23,11 @@ import type { LeaveOperations } from './leave-operations.ts'
 import { LeaveFeedback } from './EmployeeLeave.tsx'
 import './employee.css'
 
-function TaskItem({ task, showActions, onOpen, onAction }: { task: TaskEntry; showActions: boolean; onOpen: (id: string) => void; onAction: (task: TaskEntry, action: TaskAction) => void }) {
+function TaskItem({ task, onOpen, onAction }: { task: TaskEntry; onOpen: (id: string) => void; onAction: (task: TaskEntry, action: TaskAction) => void }) {
   const StatusIcon = { PENDING: Circle, IN_PROGRESS: Clock, BLOCKED: OctagonAlert, AWAITING_APPROVAL: Hourglass, APPROVED: CheckCircle2, DECLINED: Undo2, ON_HOLD: Pause, CANCELLED: Circle }[task.status]
   return <article className="employee-task">
-    <button className="employee-task-open" onClick={() => onOpen(task.id)}><span className={`employee-task-check employee-status-${task.status}`} aria-hidden="true"><StatusIcon /></span><span className="employee-task-content"><h3>{task.title}</h3><p>{task.activity}</p><span className="employee-task-flags">{(task.carryRequested || task.carriedFrom) && <span><Repeat2 aria-hidden="true" />{task.carriedFrom ? 'Carried over' : 'Carries over'}</span>}{task.status === 'AWAITING_APPROVAL' && <span>Awaiting manager</span>}{(task.status === 'BLOCKED' || task.status === 'DECLINED') && <span>{taskStatuses[task.status]}</span>}</span><small>{displayDate(task.startsOn, false)} – {displayDate(task.endsOn)}</small></span></button>
-    <div className="employee-task-side"><Badge status={taskStatuses[task.status]} />{showActions && <TaskMenu task={task} onAction={onAction} />}</div>
+    <button className="employee-task-open" onClick={() => onOpen(task.id)}><span className={`employee-task-check employee-status-${task.status}`} aria-hidden="true"><StatusIcon /></span><span className="employee-task-content"><h3>{task.title}</h3><p>{task.activity}</p><span className="employee-task-flags">{(task.carryRequested || task.carriedFrom) && <span><Repeat2 aria-hidden="true" />{task.carriedFrom ? 'Carried over' : 'Carries over'}</span>}{task.status === 'AWAITING_APPROVAL' && <span>Awaiting manager</span>}{(task.status === 'BLOCKED' || task.status === 'DECLINED') && <span>{taskStatuses[task.status]}</span>}</span></span></button>
+    <div className="employee-task-side"><div className="employee-task-side-top"><small className="employee-task-date">{displayDate(task.startsOn, false)} – {displayDate(task.endsOn)}</small><TaskMenu task={task} onAction={onAction} /></div><Badge status={taskStatuses[task.status]} /></div>
   </article>
 }
 
@@ -113,9 +114,10 @@ export function EmployeeHome({ name, state, onState, headingRef, onSessionInvali
     <section className="ui-card employee-week-card" aria-busy={read.loading || undefined}>
       <header className="ui-card-head"><div><h2>Your weekly tracker</h2><p>{data ? `${data.tasks.total} ${data.tasks.total === 1 ? 'task' : 'tasks'} · ${periodLabel}` : periodLabel}</p></div><div className="employee-actions"><div className="employee-view-switch" role="group" aria-label="Task view">{(['List', 'Card'] as const).map((item) => <button key={item} aria-pressed={view === item} onClick={() => onState({ ...state, view: item })}>{item === 'List' ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}{item}</button>)}</div><Button variant="primary" disabled={!data?.canCreate || read.stale} title={data?.createRestriction ?? undefined} onClick={add}><Plus aria-hidden="true" />Add task</Button></div></header>
       <div className="ui-card-body">
-        {read.loading && <><p className="employee-read-message">Loading tracker…</p><AnnounceEvent event={{ id: `home-loading:${params}`, message: 'Loading tracker…', intent: 'status' }} /></>}
+        {read.loading && !data && <SkeletonTaskList count={5} />}
+        {read.loading && <AnnounceEvent event={{ id: `home-loading:${params}`, message: 'Loading tracker…', intent: 'status' }} />}
         {read.error && <div className="employee-banner employee-amber"><p>{read.error}</p><Button size="small" onClick={read.retry}>Retry</Button><AnnounceEvent event={{ id: `home-error:${params}:${read.error}`, message: read.error, intent: 'alert' }} /></div>}
-        {data && <>{read.stale && <p className="employee-read-message">This tracker may be out of date. Last loaded {displayTime(data.asOf)}.</p>}{data.tasks.items.length ? <div className={`employee-tasks ${view === 'Card' ? 'employee-task-grid' : ''}`}>{data.tasks.items.map((task) => <TaskItem key={task.id} task={task} showActions={current && !frozen && !data.leave.paused && !read.stale} onOpen={setTaskId} onAction={act} />)}</div> : <div className="employee-empty"><CalendarDays aria-hidden="true" /><h3>A fresh week, a clear focus.</h3><p>Add your first task to this week’s tracker.</p>{!inspection && planningOpen && !data.leave.paused && <Button variant="primary" disabled={read.stale} onClick={add}>Add task</Button>}</div>}<Pagination value={data.tasks} label="tasks" onPage={(page) => { setTaskId(null); onState({ ...state, page }) }} /></>}
+        {data && <>{read.stale && <p className="employee-read-message">This tracker may be out of date. Last loaded {displayTime(data.asOf)}.</p>}{data.tasks.items.length ? <div className={`employee-tasks ${view === 'Card' ? 'employee-task-grid' : ''}`}>{data.tasks.items.map((task) => <TaskItem key={task.id} task={task} onOpen={setTaskId} onAction={act} />)}</div> : <div className="employee-empty"><CalendarDays aria-hidden="true" /><h3>A fresh week, a clear focus.</h3><p>Add your first task to this week’s tracker.</p>{!inspection && planningOpen && !data.leave.paused && <Button variant="primary" disabled={read.stale} onClick={add}>Add task</Button>}</div>}<Pagination value={data.tasks} label="tasks" onPage={(page) => { setTaskId(null); onState({ ...state, page }) }} /></>}
       </div>
       <div className="employee-week-bottom"><Check aria-hidden="true" />Your updates are your submission. There’s nothing extra to submit.</div>
     </section>

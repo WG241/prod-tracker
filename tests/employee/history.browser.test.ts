@@ -156,7 +156,7 @@ test('AC9 foreground session revalidation withholds private data and preserves f
     const gate = new Promise<void>((resolve) => { release = resolve }), ready = new Promise<void>((resolve) => { reached = resolve })
     await page.route('**/api/session', async (route) => { const response = await route.fetch(); reached(); await gate; await route.fulfill({ response }) })
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await ready
-    await page.getByText('Loading workspace…', { exact: true }).waitFor()
+    await page.getByRole('status', { name: 'Loading workspace…' }).waitFor()
     assert.equal(await page.locator('.employee-history-task').count(), 0)
     release(); await page.getByRole('heading', { name: 'Your work, week by week' }).waitFor(); await loaded(page)
     assert.equal(await page.getByLabel('Week', { exact: true }).inputValue(), '2026-10-19')

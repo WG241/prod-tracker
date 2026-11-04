@@ -40,6 +40,7 @@ export class TaskOperations {
       if (generation !== this.generation) return
       if (response.status === 401 || response.status === 403) { this.clear(); invalid(); return }
       const data = await response.json() as { error?: { code?: string; message?: string; fields?: Record<string, string> } } & MutationResult
+      if (generation !== this.generation) return
       if (!response.ok) {
         record.state = response.status >= 500 ? 'uncertain' : 'rejected'
         record.error = data.error?.message || 'The change could not be confirmed. Please try again.'
