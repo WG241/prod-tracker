@@ -14,7 +14,7 @@
 .employee-history-filters .ui-field { margin: 0; }
 .employee-history-filters .ui-field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .employee-history-filter { min-width: 145px; font-size: 11px; }
-.employee-history-filters .ui-field:first-child .employee-history-filter { width: 140px; min-width: 140px; }
+.employee-history-date-button { width: var(--button-height); min-width: var(--button-height); padding-inline: 0; }
 .employee-history-task { border: 0; background: transparent; color: inherit; text-align: left; font-weight: 500; padding: 5px 0; min-height: 32px; overflow-wrap: anywhere; }
 .employee-history-owner { display: block; color: var(--color-muted); font-size: var(--text-xs); font-weight: 400; }
 .employee-history-card .ui-table { min-width: 600px; }

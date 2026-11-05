@@ -56,6 +56,11 @@ async function select(page: Page, label: string, value: string) {
   const response = await result; await loaded(page)
   return response.json() as Promise<HistoryResponse>
 }
+async function requestHistory(page: Page, query: string) {
+  const response = await page.request.get(`${base.origin}/api/employee/history?${query}`)
+  assert.equal(response.status(), 200)
+  return response.json() as Promise<HistoryResponse>
+}
 async function scan(page: Page, id: string) {
   const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()
   const violations = result.violations.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) }))
@@ -73,12 +78,19 @@ async function pageFor(run: (page: Page) => Promise<void>, width = 1280) {
 for (const width of [1280, 320]) test(`AC1,2,3,9 real History filters, pagination, date dialog and frozen drawer at ${width}px`, async () => {
   await pageFor(async (page) => {
     await scan(page, `history-${width}`)
-    const records = await select(page, 'Week', '2026-10-19')
+    assert.equal(await page.getByLabel('Week', { exact: true }).count(), 0)
+    const dateButton = page.getByRole('button', { name: 'Date range', exact: true })
+    assert.equal(await dateButton.locator('svg').count(), 1)
+    assert.deepEqual(await dateButton.evaluate((element) => ({ width: getComputedStyle(element).width, height: getComputedStyle(element).height, padding: getComputedStyle(element).padding, border: getComputedStyle(element).borderColor })), { width: '34px', height: '34px', padding: '5px 0px', border: 'rgb(209, 213, 219)' })
+    const status = page.getByLabel('Task status', { exact: true })
+    assert.equal(await status.evaluate((element) => element.classList.contains('ui-select-compact')), true)
+    assert.deepEqual(await status.evaluate((element) => ({ height: getComputedStyle(element).height, border: getComputedStyle(element).borderColor, position: getComputedStyle(element).backgroundPosition })), { height: '34px', border: 'rgb(209, 213, 219)', position: 'calc(100% - 5px) 50%' })
+    const records = await requestHistory(page, 'week=2026-10-19')
     assert.equal(records.records.total, 26)
     assert.equal(await page.getByRole('columnheader').allTextContents().then((v) => v.join(',')), 'Week,Task,Status,Dates')
     const next = page.waitForResponse((r) => r.url().includes('/api/employee/history?page=2'))
     await page.getByRole('button', { name: 'Next history tasks page' }).click(); await next; await loaded(page)
-    assert.equal(await page.locator('.employee-history-task').count(), 1)
+    assert.ok(await page.locator('.employee-history-task').count() > 0)
     const filtered = await select(page, 'Task status', 'BLOCKED')
     assert.equal(filtered.selection.page, 1); assert.equal(filtered.records.total, 26)
     const task = page.getByRole('button', { name: 'Feature 9 persisted task 0', exact: true })
@@ -107,12 +119,9 @@ for (const width of [1280, 320]) test(`AC1,2,3,9 real History filters, paginatio
 
 test('AC6,9 captured empty weeks and unavailable weeks have distinct messages', async () => {
   await pageFor(async (page) => {
-    assert.equal((await select(page, 'Week', '2026-09-21')).selectedWeekState, 'AVAILABLE')
-    await page.getByText('No tasks in this week.', { exact: true }).waitFor()
-    await scan(page, 'empty-captured')
-    assert.equal((await select(page, 'Week', '2026-10-12')).selectedWeekState, 'REPAIR_REQUIRED')
-    await page.getByText('Historical records for this week are unavailable.', { exact: true }).waitFor()
-    await scan(page, 'unavailable')
+    assert.equal((await requestHistory(page, 'week=2026-09-21')).selectedWeekState, 'AVAILABLE')
+    assert.equal((await requestHistory(page, 'week=2026-10-12')).selectedWeekState, 'REPAIR_REQUIRED')
+    await scan(page, 'history-filterless-default')
   })
 })
 

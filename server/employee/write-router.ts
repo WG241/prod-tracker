@@ -8,16 +8,15 @@ import { providerHeaders } from '../auth/service.ts'
 import { forwardCookies } from '../auth/router.ts'
 import { AuthFailure } from '../auth/errors.ts'
 import { clientIp, reserve, throttleKey } from '../auth/throttle.ts'
-import type { Capture } from '../telemetry/service.ts'
 import { EmployeeFailure } from './calendar.ts'
 import { parseOperation, requestIdentity, TaskFailure } from './task-validation.ts'
 import { mutateTask } from './writes.ts'
 
-export function registerTaskWrites(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig, capture: Capture, onSubmitted: (at: string) => void) {
+export function registerTaskWrites(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig) {
   const router = express.Router()
   const fail = (response: Response, error: unknown) => {
     const failure = error instanceof TaskFailure || error instanceof EmployeeFailure || error instanceof AuthFailure ? error : new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
-    if (failure.status >= 500) capture('API_UNAVAILABLE', 'api', 'api', error, failure.status)
+    if (failure.status >= 500) console.error('Task write failure', error)
     if (failure instanceof AuthFailure && failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
     response.status(failure.status).json({ error: { code: failure.code, message: failure.message, ...(failure instanceof TaskFailure && failure.fields ? { fields: failure.fields } : {}) } })
   }
@@ -48,7 +47,7 @@ export function registerTaskWrites(api: Router, db: PrismaClient, service: AuthS
       else if (taskId && request.method === 'POST' && ['status', 'comments', 'carry'].includes(String(action))) kind = action === 'status' ? 'STATUS' : action === 'comments' ? 'COMMENT' : 'CARRY'
       else throw new TaskFailure('INVALID_INPUT', 400)
       const operation = parseOperation(kind, taskId, request.body, request.get('if-match'))
-      const receipt = await mutateTask(db, result.context, result.internalSessionId, requestIdentity(request.get('idempotency-key')), operation, onSubmitted)
+      const receipt = await mutateTask(db, result.context, result.internalSessionId, requestIdentity(request.get('idempotency-key')), operation)
       response.status(kind === 'CREATE' ? 201 : 200).json(receipt)
     } catch (error) { fail(response, error) }
   })

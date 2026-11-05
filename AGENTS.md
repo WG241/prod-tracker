@@ -163,7 +163,6 @@ If the user is already on `main` or `staging` with local commits, move those com
 - [server/data-proof/AGENTS.md](server/data-proof/AGENTS.md): fixed local development proof, request guards, and reply retry semantics.
 - [server/auth/AGENTS.md](server/auth/AGENTS.md): linked credentials, sessions, current role context, policies, limits, audit and trusted provisioning.
 - [src/components/accessibility/AGENTS.md](src/components/accessibility/AGENTS.md): shared validation, scoped announcements, context cancellation and required browser evidence.
-- [server/telemetry/AGENTS.md](server/telemetry/AGENTS.md): bounded private file storage, sanitized capture, trusted event sources and telemetry verification.
 - [server/employee/AGENTS.md](server/employee/AGENTS.md): Employee projections, ordered write locks, receipts, ownership, calendar permissions and pagination.
 - [src/features/employee/AGENTS.md](src/features/employee/AGENTS.md): Employee Home selection, read cancellation, retained write operations, private state and drawer focus.
 

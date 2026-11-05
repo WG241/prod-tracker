@@ -22,10 +22,11 @@ export function TaskActionDialog({ selection, operations, onClose, onReload, onS
   const { task, week, kind } = selection
   const baseKind = kind === 'CREATE' || kind === 'EDIT' || kind === 'CARRY' || kind === 'DELETE' ? kind : 'STATUS'
   const key = kind === 'CREATE' ? 'CREATE' : `${baseKind}:${task!.id}`
+  const draftKey = `FORM:${key}`
   const record = store.get(key)
   const unresolved = record?.state === 'pending' || record?.state === 'uncertain'
   const prior = unresolved ? record.operation : null
-  const [draft, setDraft] = useState<TaskDraft | undefined>(prior && (prior.kind === 'CREATE' || prior.kind === 'EDIT') ? prior.draft : undefined)
+  const [draft, setDraft] = useState<TaskDraft | undefined>(() => prior && (prior.kind === 'CREATE' || prior.kind === 'EDIT') ? prior.draft : store.getDraft<TaskDraft>(draftKey))
   const [step, setStep] = useState<'form' | 'confirm' | 'blocker' | 'next'>(() => kind === 'EDIT' || kind === 'CREATE' ? 'form' : kind === 'BLOCKED' ? 'blocker' : 'confirm')
   const [reason, setReason] = useState(prior && (prior.kind === 'STATUS' || prior.kind === 'EDIT') ? (prior.kind === 'EDIT' ? prior.draft.blockerReason : prior.blockerReason) ?? '' : task?.status === 'BLOCKED' ? task.reason ?? '' : '')
   const reasonValue = useRef(reason)
@@ -43,7 +44,7 @@ export function TaskActionDialog({ selection, operations, onClose, onReload, onS
     queueMicrotask(() => { if (active) { if (blocked) setStep('next'); else onClose() } })
     return () => { active = false }
   }, [record?.state, record, onClose])
-  function send(operation: TaskOperation) { submitted.current = true; void store.send(operation, onSessionInvalid) }
+  function send(operation: TaskOperation) { submitted.current = true; store.discardDraft(draftKey); void store.send(operation, onSessionInvalid) }
   function save(value: TaskDraft) {
     setDraft(value)
     if (value.status === 'BLOCKED') { setStep('blocker'); return }
@@ -59,7 +60,7 @@ export function TaskActionDialog({ selection, operations, onClose, onReload, onS
   }
   function back() { if (kind === 'EDIT' && !unresolved) setStep('form'); else onClose() }
   if (step === 'form') return <TaskForm week={week} task={task} initial={draft} pending={pending} uncertain={uncertain} conflict={conflict} error={record?.error ?? ''} fields={record?.fields} returnFocusRef={returnFocusRef}
-    onSubmit={save} onClose={onClose} onRetry={() => record && send(record.operation)} onReload={() => { store.discard(key); onReload() }} />
+    onSubmit={save} onClose={onClose} onDraftChange={(value) => store.setDraft(draftKey, value)} onRetry={() => record && send(record.operation)} onReload={() => { store.discard(key); onReload() }} />
   if (step === 'next') return <Dialog open size="small" title="What would you like to do next?" onClose={onClose} returnFocusRef={returnFocusRef} footer={<Button onClick={onClose}>Cancel</Button>}><p className="employee-muted employee-form-intro">Your blocker is saved. Choose what happens to this task.</p><div className="employee-next-actions">{(['CARRY', 'DELETE'] as const).map((next) => <button className="employee-next-action" key={next} disabled={next === 'CARRY' ? !task?.permissions.canCarry : !task?.permissions.canDelete} onClick={() => task && onNext({ kind: next, week, task: { ...task, revision: record?.result?.taskRevision ?? task.revision, status: 'BLOCKED', reason } })}>{next === 'CARRY' ? <Repeat2 aria-hidden="true" /> : <Trash2 aria-hidden="true" />}<span><strong>{next === 'CARRY' ? 'Carry over to next week' : 'Delete task'}</strong><small>{next === 'CARRY' ? 'Keep the task and its blocker visible.' : 'Remove it from your weekly plan.'}</small></span>{next === 'CARRY' && <ChevronRight aria-hidden="true" />}</button>)}</div></Dialog>
   const completing = kind === 'COMPLETED' || draft?.status === 'COMPLETED'
   const title = step === 'blocker' ? 'What is blocking this task?' : kind === 'DELETE' ? 'Delete this task?' : kind === 'CARRY' ? task?.carryRequested ? 'Clear carry over?' : 'Carry over next week?' : completing ? 'Complete this task?' : kind === 'IN_PROGRESS' ? 'Set this task to In progress?' : 'Set this task to Pending?'

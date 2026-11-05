@@ -4,16 +4,15 @@ import type { AuthConfig } from '../auth/config.ts'
 import type { AuthService } from '../auth/service.ts'
 import { providerHeaders } from '../auth/service.ts'
 import { forwardCookies } from '../auth/router.ts'
-import type { Capture } from '../telemetry/service.ts'
 import { EmployeeFailure, readQuery } from './calendar.ts'
 import { readDetail, readHome } from './reads.ts'
 import { registerTaskWrites } from './write-router.ts'
 import { historyQuery, readHistory } from './history-reads.ts'
 import { registerLeave } from './leave-router.ts'
 
-export function registerEmployee(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig, capture: Capture = () => {}, onSubmitted: (at: string) => void = () => {}) {
-  registerTaskWrites(api, db, service, config, capture, onSubmitted)
-  registerLeave(api, db, service, config, capture)
+export function registerEmployee(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig) {
+  registerTaskWrites(api, db, service, config)
+  registerLeave(api, db, service, config)
   api.all(['/employee/home', '/employee/history', '/employee/tasks/:taskId'], async (request, response) => {
     response.setHeader('Cache-Control', 'no-store')
     try {
@@ -32,7 +31,7 @@ export function registerEmployee(api: Router, db: PrismaClient, service: AuthSer
       response.json(taskId === undefined ? await readHome(db, result.context, query, asOf) : await readDetail(db, result.context, taskId, query, asOf))
     } catch (error) {
       const failure = error instanceof EmployeeFailure ? error : new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
-      if (failure.status === 503) capture('API_UNAVAILABLE', 'api', 'api', error, 503)
+      if (failure.status === 503) console.error('Employee read failure', error)
       response.status(failure.status).json({ error: { code: failure.code, message: failure.message } })
     }
   })

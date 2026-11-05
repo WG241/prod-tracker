@@ -10,22 +10,19 @@ import { registerHealth } from './health.ts'
 import { registerDataProof } from './data-proof/router.ts'
 import { readAuthConfig } from './auth/config.ts'
 import { createAuth } from './auth/provider.ts'
-import { createAuthService, providerHeaders } from './auth/service.ts'
+import { createAuthService } from './auth/service.ts'
 import { registerAuth, registerNavigation } from './auth/router.ts'
-import { committedEvents, createTelemetry } from './telemetry/service.ts'
-import { fatalGuard, telemetryErrors } from './telemetry/errors.ts'
-import { registerTelemetry } from './telemetry/router.ts'
-import { privateStorage } from './telemetry/private-storage.ts'
+import { apiErrorHandler, fatalGuard } from './errors.ts'
+import { privateStorage } from './private-storage.ts'
 import { registerEmployee } from './employee/router.ts'
 import { startHistoryWorker } from './employee/history-worker.ts'
 
-const telemetry = createTelemetry()
-fatalGuard(telemetry.enabled)
+fatalGuard()
 
 async function main() {
   const config = readConfig()
   const authConfig = readAuthConfig()
-  const prisma = createDatabase(config.connectionString, telemetry.capture)
+  const prisma = createDatabase(config.connectionString)
   const authService = createAuthService(prisma, createAuth(prisma, authConfig))
   const app = express()
   const server = createServer(app)
@@ -35,14 +32,13 @@ async function main() {
   if (config.trustProxy !== false) app.set('trust proxy', config.trustProxy)
 
   const api = express.Router()
-  registerHealth(api, prisma, telemetry.capture)
-  registerTelemetry(api, telemetry, config, (request) => authService.current(providerHeaders(request.headers)))
+  registerHealth(api, prisma)
   registerDataProof(api, prisma, config)
-  registerAuth(api, prisma, authService, authConfig, telemetry.capture)
-  registerEmployee(api, prisma, authService, authConfig, telemetry.capture, (at) => { if (telemetry.environment) committedEvents((record) => telemetry.writer.offer(record), telemetry.environment).submitted({ newlyApplied: true, submittedAt: new Date(at), role: 'EMPLOYEE', method: 'HUMAN' }) })
+  registerAuth(api, prisma, authService, authConfig)
+  registerEmployee(api, prisma, authService, authConfig)
   api.use((_request, response) => response.status(404).json({ error: 'Not found' }))
   app.use('/api', api)
-  registerNavigation(app, authService, config.development, telemetry.capture)
+  registerNavigation(app, authService, config.development)
 
   let vite: ViteDevServer | undefined
   if (config.development) {
@@ -63,8 +59,8 @@ async function main() {
     app.use((_request, response) => response.status(404).json({ error: 'Not found' }))
   }
 
-  app.use(telemetryErrors(telemetry.capture))
-  const stopHistory = startHistoryWorker(prisma, telemetry.capture)
+  app.use(apiErrorHandler())
+  const stopHistory = startHistoryWorker(prisma)
 
   let stopping = false
   const shutdown = async () => {
@@ -77,13 +73,12 @@ async function main() {
     await httpClosed
     await historyStopped
     await prisma.$disconnect()
-    await telemetry.writer.shutdown()
     clearTimeout(deadline)
   }
   process.once('SIGINT', () => void shutdown())
   process.once('SIGTERM', () => void shutdown())
   server.once('error', (error) => {
-    telemetry.capture('STARTUP_FAILURE', 'startup', 'startup', error)
+    console.error('Server startup failed', error)
     void shutdown().then(() => { process.exitCode = 1 })
   })
   server.listen(config.port, config.host, () => {
@@ -92,8 +87,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  telemetry.capture('STARTUP_FAILURE', 'startup', 'startup', error)
-  console.error('Server startup failed')
-  void telemetry.writer.shutdown()
+  console.error('Server startup failed', error)
   process.exitCode = 1
 })

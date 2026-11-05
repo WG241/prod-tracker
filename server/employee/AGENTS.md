@@ -16,7 +16,7 @@ Frozen details require snapshotAt and validated version 1 recorded owner and rep
 
 `writes.ts` uses Read Committed transactions, an owner User mutex, explicit permission and task locks, a fresh clock after waits, and at most three attempts for deadlocks or natural key races. Future manager and HR writers must follow the same owner, permission, week, source task, continuation order. Read checks use the same calendar facts.
 
-Every successful command, including no change, commits one immutable user/UUID receipt. Its digest includes the supplied revision. Direct content changes increment task revision; comments and source controlled continuation visibility do not. A failed request commits no domain evidence. Submission notification and audit commit with the request, and telemetry runs only after a new commit.
+Every successful command, including no change, commits one immutable user/UUID receipt. Its digest includes the supplied revision. Direct content changes increment task revision; comments and source controlled continuation visibility do not. A failed request commits no domain evidence. Submission notification and audit commit with the request.
 
 Carry creates only the immediate next week, preserves independent content, and only hides or restores a revision zero Pending continuation without edits, comments, review history or children. Delete hides only its source. Planning closure blocks carry and delete; freeze and leave block all writes. Approved tasks permit current conversation only.
 

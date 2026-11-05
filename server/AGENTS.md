@@ -14,7 +14,7 @@ This area implements architecture [spec 0001](../docs/specs/0001-stack-and-archi
 
 `db.ts` appends UTC to PostgreSQL session options because PrismaPg expects UTC timestamp output. Business calendar calculations remain Africa/Lagos. `databaseErrorCode` unwraps Prisma driver causes so raw query lock and deadlock codes retain their retry semantics.
 
-`telemetry/` owns bounded local diagnostics and aggregate event contracts; see [telemetry/AGENTS.md](telemetry/AGENTS.md). Composition injects typed capture into readiness, pool and request failure paths. Private storage is blocked before Vite and static serving. Local files do not replace required business audits.
+`errors.ts` owns process level crash containment (`fatalGuard`, no raw exception logging) and the generic API error response (`apiErrorHandler`). `private-storage.ts` blocks any `.local` path before Vite and static serving.
 
 Use `npm run dev` for development against Neon (`DATABASE_URL` / `DATABASE_URL_UNPOOLED` in `.env`). `npm run check` checks and builds both browser and server; `npm run start` runs compiled output. Server shutdown closes the HTTP listener, Vite when present, and Prisma's pool.
 

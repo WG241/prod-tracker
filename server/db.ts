@@ -1,7 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import { PrismaClient } from '../src/generated/prisma/client.ts'
-import type { Capture } from './telemetry/service.ts'
 
 export function databaseErrorCode(error: unknown, depth = 0): string | null {
   if (!error || typeof error !== 'object' || depth > 4) return null
@@ -15,7 +14,7 @@ export function databaseErrorCode(error: unknown, depth = 0): string | null {
   return 'code' in error && typeof error.code === 'string' ? error.code : null
 }
 
-export function createDatabase(connectionString: string, capture: Capture = () => {}) {
+export function createDatabase(connectionString: string) {
   // PrismaPg normalizes timestamptz values assuming a UTC database session.
   // URL options override Pool options, so append this setting to the URL itself.
   const target = new URL(connectionString)
@@ -30,7 +29,7 @@ export function createDatabase(connectionString: string, capture: Capture = () =
   })
   const adapter = new PrismaPg(pool, {
     disposeExternalPool: true,
-    onPoolError: (error) => capture('DATABASE_UNAVAILABLE', 'database', 'database-pool', error),
+    onPoolError: (error) => console.error('Database pool error', error),
   })
   return new PrismaClient({ adapter, errorFormat: 'minimal' })
 }

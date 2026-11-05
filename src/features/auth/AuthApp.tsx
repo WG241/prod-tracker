@@ -14,7 +14,6 @@ import { CircleAlert } from 'lucide-react'
 import './auth.css'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 import { useAnnounce, useAnnouncementReset } from '../../components/accessibility/useAnnounce.ts'
-import { useWorkspaceView } from '../telemetry/client.ts'
 import { initialEmployeeView } from '../employee/contracts.ts'
 import type { EmployeeView } from '../employee/contracts.ts'
 import { TaskOperations } from '../employee/operations.ts'
@@ -53,7 +52,6 @@ function UnavailableFeature({ role, selected, headingRef, signingOut }: { role: 
 }
 
 function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView, onSessionInvalid, operations, historyView, onHistoryView, leaveOperations, leaveView, onLeaveView, revalidating }: { context: SessionContext; notice: string; employeeView: EmployeeView; onEmployeeView: (value: EmployeeView) => void; onSessionInvalid: () => void; operations: TaskOperations; historyView: HistoryView; onHistoryView: (next: HistoryView) => void; leaveOperations: LeaveOperations; leaveView: LeaveView; onLeaveView: (next: LeaveView) => void; revalidating: boolean }) {
-  useWorkspaceView()
   const role = roleRoutes[context.role].label
   const workspace = { ...workspaces[role], name: context.user.name }
   const [path, setPath] = useState(window.location.pathname)

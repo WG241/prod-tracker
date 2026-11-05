@@ -9,7 +9,6 @@ import { CheckboxField, InputField, SelectField, TextareaField } from '../compon
 import { Table } from '../components/ui/Table.tsx'
 import { AnnouncementExamples, ExampleForm } from './AccessibilityExamples.tsx'
 import { useAnnounce, useAnnouncementReset } from '../components/accessibility/useAnnounce.ts'
-import { TelemetryExamples } from './TelemetryExamples.tsx'
 
 export function ComponentPreview() {
   const [overlay, setOverlay] = useState<'dialog' | 'small' | 'wide' | 'drawer' | 'long-drawer' | 'long' | 'removed' | null>(null)
@@ -31,7 +30,6 @@ export function ComponentPreview() {
       <a href="/__ui?view=workspace" className="preview-return"><ArrowLeft aria-hidden="true" />Return to workspace preview</a>
       <header className="workspace-page-heading"><p className="eyebrow">Development preview</p><h1 ref={heading} tabIndex={-1}>Component preview</h1><p>Shared controls from the Workforce prototype. Fictional examples only.</p></header>
       <div className="preview-sections">
-        <TelemetryExamples />
         <Card title="Buttons" description="Default, hover, focus, disabled, and small variants.">
           <div className="preview-row">{(['default', 'primary', 'success', 'danger', 'ghost'] as const).map((variant) => <Button key={variant} variant={variant}>{variant === 'primary' && <Plus aria-hidden="true" />}{variant[0].toUpperCase() + variant.slice(1)}</Button>)}</div>
           <div className="preview-row"><Button size="small">Small button</Button><Button variant="primary" size="small">Small primary</Button><Button disabled aria-describedby="preview-disabled">Disabled</Button><IconButton label="Notification example"><Bell aria-hidden="true" /></IconButton><IconButton label="Disabled notification example" disabled><Bell aria-hidden="true" /></IconButton></div>

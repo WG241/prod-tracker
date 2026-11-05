@@ -7,7 +7,6 @@
     "tests/**/*.ts",
     "scripts/auth-*.ts",
     "scripts/repair-migration-checksums.ts",
-    "scripts/telemetry.ts",
     "scripts/history-capture.ts"
   ]
 }

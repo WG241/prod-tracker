@@ -10,9 +10,9 @@ import type { TaskEntry } from './contracts.ts'
 import type { RefObject } from 'react'
 import { AnnounceEvent } from '../../components/accessibility/Announcements.tsx'
 
-export function TaskForm({ week, task, initial, pending, error, fields: serverFields, conflict, uncertain, onSubmit, onRetry, onReload, onClose, returnFocusRef }: {
+export function TaskForm({ week, task, initial, pending, error, fields: serverFields, conflict, uncertain, onSubmit, onRetry, onReload, onClose, onDraftChange, returnFocusRef }: {
   week: string; task?: TaskEntry; initial?: TaskDraft; pending: boolean; error: string; fields?: Record<string, string>; conflict: boolean; uncertain: boolean
-  onSubmit: (draft: TaskDraft) => void; onRetry: () => void; onReload: () => void; onClose: () => void; returnFocusRef: RefObject<HTMLElement | null>
+  onSubmit: (draft: TaskDraft) => void; onRetry: () => void; onReload: () => void; onClose: () => void; onDraftChange?: (draft: TaskDraft) => void; returnFocusRef: RefObject<HTMLElement | null>
 }) {
   const friday = shiftDate(week, 4) ?? week
   const [draft, setDraft] = useState<TaskDraft>(() => initial ?? (task ? {
@@ -59,6 +59,7 @@ export function TaskForm({ week, task, initial, pending, error, fields: serverFi
     const next = { ...draftRef.current, [key]: value, ...(key === 'endsOn' && String(value) > friday ? { carryRequested: true } : {}) }
     draftRef.current = next
     setDraft(next)
+    onDraftChange?.(next)
     if (key === 'title' || key === 'activity' || key === 'startsOn' || key === 'endsOn' || key === 'carryRequested') validation.revalidate(key)
   }
   return <Dialog open title={task ? 'Edit task' : 'Add a task'} onClose={onClose} returnFocusRef={returnFocusRef} footer={<>

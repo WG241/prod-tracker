@@ -124,6 +124,8 @@ Error monitoring for failed API and client crashes; product analytics for submit
 - [ ] Verify it: `/check verify error monitoring and product analytics`
   - [ ] Real app error capture, privacy, failure bounds, and production isolation evidence (AC-1 through AC-6, AC-10)
   - [ ] Actual authenticated views, submission and approval workflow evidence, no synthetic substitute (AC-7 through AC-10)
-spec [0007](../specs/0007-error-monitoring-product-analytics/index.md)
+spec 0007 (removed)
 
-Design confirmed 2026-10-28. Foundation implemented 2026-11-02 in `server/telemetry/`, `src/features/telemetry/` and `scripts/telemetry.ts`. Local files enforce the approved privacy, queue and retention bounds; business audits remain separate. The configured development suite passed 29 checks, with production recovery and off mode verified separately. See [verification](../specs/0007-error-monitoring-product-analytics/verify.md). Build it, Test it and final Verify it remain open until real Features 10, 17 and 19 workflows pass. Actual authenticated view proof remains pending under the user's credential deferral. The approved recovery controls were visually checked against the HTTP prototype before implementation.
+Design confirmed 2026-10-28. Foundation implemented 2026-11-02 in `server/telemetry/`, `src/features/telemetry/` and `scripts/telemetry.ts`. Local files enforced the approved privacy, queue and retention bounds; business audits remained separate. The configured development suite passed 29 checks, with production recovery and off mode verified separately.
+
+Removed 2026-11-04: the local telemetry foundation (code, tests, scripts, and spec 0007 itself) was deleted at the user's request. Error monitoring and product analytics are no longer implemented; this feature is no longer pursued unless re-scoped. Crash containment (`server/errors.ts` `fatalGuard`) and the React recovery boundary (`src/components/RecoveryBoundary.tsx`) were kept, stripped of their reporting calls, since they are general app safety rather than telemetry.

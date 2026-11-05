@@ -3,7 +3,6 @@ import type { ErrorRequestHandler, Router } from 'express'
 import type { PrismaClient } from '../../src/generated/prisma/client.ts'
 import type { AuthConfig } from '../auth/config.ts'
 import type { AuthService } from '../auth/service.ts'
-import type { Capture } from '../telemetry/service.ts'
 import { providerHeaders } from '../auth/service.ts'
 import { forwardCookies } from '../auth/router.ts'
 import { AuthFailure } from '../auth/errors.ts'
@@ -14,7 +13,7 @@ import { currentLeave } from './leave-state.ts'
 import { parseLeaveOperation, LeaveFailure } from './leave-validation.ts'
 import { mutateLeave } from './leave-writes.ts'
 
-export function registerLeave(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig, capture: Capture) {
+export function registerLeave(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig) {
   const router = express.Router()
   router.use((req, res, next) => {
     res.setHeader('Cache-Control', 'no-store')
@@ -51,7 +50,7 @@ export function registerLeave(api: Router, db: PrismaClient, service: AuthServic
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     const typed = error instanceof LeaveFailure || error instanceof EmployeeFailure || error instanceof AuthFailure
     const status = typed ? error.status : error && typeof error === 'object' && 'status' in error && error.status === 413 ? 413 : error instanceof SyntaxError ? 400 : 503
-    if (status >= 500) capture('API_UNAVAILABLE', 'api', 'api', error, status)
+    if (status >= 500) console.error('Leave request failure', error)
     if (error instanceof AuthFailure && error.retryAfter) res.setHeader('Retry-After', error.retryAfter)
     res.status(status).json({ error: { code: typed ? error.code : status < 500 ? 'INVALID_INPUT' : 'SERVICE_UNAVAILABLE', message: typed ? error.message : status === 413 ? 'The leave request is too large.' : status < 500 ? 'Check the leave fields and try again.' : 'The service is unavailable. Please try again.', ...(error instanceof LeaveFailure && error.fields ? { fields: error.fields } : {}) } })
   }

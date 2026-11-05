@@ -25,9 +25,8 @@ const config = readAuthConfig(), service = createAuthService(db, createAuth(db, 
 const id = `f10-${randomUUID()}`, start = monday(new Date()), week = isoDay(start)
 const server = createServer()
 let context: SessionContext, sessionId: string, cookie: string, base: string
-let submitted = 0
 const draft = (extra: Partial<TaskDraft> = {}): TaskDraft => ({ title: 'Persisted lifecycle outcome', activity: 'Work recorded on the real separate database', startsOn: week, endsOn: isoDay(shiftDay(start, 4)), carryRequested: false, ...extra })
-const command = (op: TaskOperation, key: string = randomUUID(), client = db) => mutateTask(client, context, sessionId, key, op, () => { submitted++ })
+const command = (op: TaskOperation, key: string = randomUUID(), client = db) => mutateTask(client, context, sessionId, key, op)
 async function create(extra: Partial<TaskDraft> = {}) { return command({ kind: 'CREATE', week, draft: draft(extra) }) }
 async function row(id: string) { return db.weeklyTask.findUniqueOrThrow({ where: { id } }) }
 const rejection = (code: string) => (error: unknown) => !!error && typeof error === 'object' && 'code' in error && error.code === code
@@ -85,12 +84,11 @@ test('AC2,8 create replay, concurrent UUID and no change receipt survive later s
   await command({ kind: 'DELETE', taskId: result.taskId, revision: 2 })
   assert.equal((await command(noop, noopKey)).replayed, true, 'A no change receipt still replays after the target is hidden')
 })
-test('AC4,5 completion, immutable withdrawal, explicit resubmission and notification telemetry once', async () => {
-  const task = await create(), before = submitted, key = randomUUID()
+test('AC4,5 completion, immutable withdrawal and explicit resubmission', async () => {
+  const task = await create(), key = randomUUID()
   const op: TaskOperation = { kind: 'STATUS', taskId: task.taskId, revision: 0, status: 'COMPLETED' }
   const complete = await command(op, key)
   await command(op, key)
-  assert.equal(submitted, before + 1)
   assert.equal((await row(task.taskId)).status, 'AWAITING_APPROVAL')
   const request = await db.approvalRequest.findUniqueOrThrow({ where: { id: complete.approvalRequestId! } })
   assert.equal(await db.notification.count({ where: { deduplicationKey: `approval-requested:${request.id}` } }), 1)
@@ -140,7 +138,7 @@ test('AC7,8 same comment key appends once without revising content or withdrawin
 test('AC8 injected create, audit, receipt and notification failures roll back all domain rows', async () => {
   async function counts() { return Promise.all([db.weeklyTask.count({ where: { ownerId: id } }), db.taskSeries.count({ where: { ownerId: id } }), db.approvalRequest.count({ where: { submittedById: id } }), db.notification.count({ where: { task: { ownerId: id } } }), db.auditEvent.count({ where: { actorId: id } }), db.taskMutationReceipt.count({ where: { userId: id } })]) }
   for (const model of ['WeeklyTask', 'AuditEvent', 'TaskMutationReceipt', 'ApprovalRequest', 'Notification']) {
-    const task = await create(), before = await counts(), events = submitted
+    const task = await create(), before = await counts()
     const failing = db.$extends({ query: { $allModels: { async $allOperations({ model: current, operation, args, query }) {
       const value = await query(args)
       if (current === model && (operation === 'create' || operation === 'update')) throw new Error('Isolated injected persistence failure')
@@ -149,7 +147,6 @@ test('AC8 injected create, audit, receipt and notification failures roll back al
     await assert.rejects(command(model === 'WeeklyTask' ? { kind: 'CREATE', week, draft: draft({ carryRequested: true }) } : { kind: 'STATUS', taskId: task.taskId, revision: 0, status: 'COMPLETED' }, randomUUID(), failing))
     assert.deepEqual(await counts(), before, model)
     assert.equal((await row(task.taskId)).revision, 0)
-    assert.equal(submitted, events)
   }
 })
 test('AC3,9 lock, leave, ownership and current persisted session are authoritative', async () => {

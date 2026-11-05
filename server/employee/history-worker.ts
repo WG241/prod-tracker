@@ -1,5 +1,4 @@
 import type { PrismaClient } from '../../src/generated/prisma/client.ts'
-import type { Capture } from '../telemetry/service.ts'
 import { databaseErrorCode } from '../db.ts'
 import { day, isoDay, shiftDay, watMidnight } from '../data-model/calendar.ts'
 import { monday, parseDay, weekProjection } from './calendar.ts'
@@ -12,6 +11,8 @@ export type HistoryCursor = { coverage: string | null; person: { week: string; u
 export function historyCursor(): HistoryCursor { return { coverage: null, person: null, completion: null, phase: 0, retry: new Map() } }
 export type HistoryScope = { week?: string; userId?: string }
 export type HistoryReport = { persons: { captured: number; already: number; pending: number; repair: number }; weeks: { ensured: number; complete: number; pending: number; repair: number }; results: CaptureResult[]; remaining: boolean; infrastructureFailure: boolean }
+export type HistoryDiagnostic = (code: string, source?: string, locationKey?: string, error?: unknown) => void
+const logDiagnostic: HistoryDiagnostic = (code, _source, _locationKey, error) => { if (error === undefined) console.error(code); else console.error(code, error) }
 export function historyScope(args: string[]) {
   const scope: HistoryScope = {}, seen = new Set<string>()
   let apply = false
@@ -69,7 +70,7 @@ async function nextPerson(db: PrismaClient, cursor: HistoryCursor['person'], sco
       AND (${scope.userId ?? null}::text IS NULL OR c."userId"=${scope.userId ?? null})
     ORDER BY c.week,c."userId" LIMIT 1`)[0] ?? null
 }
-export async function historyPass(db: PrismaClient, cursor: HistoryCursor, apply: boolean, scope: HistoryScope = {}, stopping: () => boolean = () => false, capture: Capture = () => {}): Promise<HistoryReport> {
+export async function historyPass(db: PrismaClient, cursor: HistoryCursor, apply: boolean, scope: HistoryScope = {}, stopping: () => boolean = () => false, capture: HistoryDiagnostic = logDiagnostic): Promise<HistoryReport> {
   const report: HistoryReport = { persons: { captured: 0, already: 0, pending: 0, repair: 0 }, weeks: { ensured: 0, complete: 0, pending: 0, repair: 0 }, results: [], remaining: false, infrastructureFailure: false }
   const deadline = Date.now() + 20000
   let stopPass = false
@@ -153,12 +154,12 @@ export async function historyPass(db: PrismaClient, cursor: HistoryCursor, apply
   if (scope.week && (await db.workWeek.findUnique({ where: { startsOn: day(scope.week) } }))?.rosterCapturedAt) report.remaining = false
   return report
 }
-export function startHistoryWorker(db: PrismaClient, capture: Capture) {
+export function startHistoryWorker(db: PrismaClient) {
   const cursor = historyCursor()
   let stopped = false, active: Promise<unknown> | null = null
   const tick = () => {
     if (stopped || active) return
-    active = historyPass(db, cursor, true, {}, () => stopped, capture).catch((error: unknown) => capture('HISTORY_CAPTURE_FAILED', 'background', 'history-capture', error)).finally(() => { active = null })
+    active = historyPass(db, cursor, true, {}, () => stopped).catch((error: unknown) => logDiagnostic('HISTORY_CAPTURE_FAILED', 'background', 'history-capture', error)).finally(() => { active = null })
   }
   const timer = setInterval(tick, 60000).unref()
   tick()

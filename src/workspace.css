@@ -64,7 +64,7 @@ h1, h2 { font-weight: var(--font-weight-semibold); }
 .development-bar a:hover { text-decoration: underline; }
 .development-bar select { background-color: var(--color-proto-input); color: var(--color-surface); border: 1px solid var(--color-proto-muted); font-size: var(--text-sm); border-radius: var(--radius-sm); min-height: 26px; height: 26px; padding: 2px var(--spacing-2); max-width: 180px; }
 .workspace-loading { padding: var(--spacing-8); }
-.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--spacing-2); min-height: var(--button-height); border: 1px solid var(--color-control-border); border-radius: var(--button-radius); padding: var(--button-padding-y) var(--button-padding-x); background: var(--color-surface); color: var(--color-gray-700); font-weight: var(--font-weight-medium); font-size: var(--text-md); white-space: nowrap; }
+.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--spacing-2); min-height: var(--button-height); border: 1px solid var(--color-border); border-radius: var(--button-radius); padding: var(--button-padding-y) var(--button-padding-x); background: var(--color-surface); color: var(--color-gray-700); font-weight: var(--font-weight-medium); font-size: var(--text-md); white-space: nowrap; }
 .ui-button:hover:not(:disabled) { background: var(--color-surface-subtle); }
 .ui-button:active:not(:disabled) { background: var(--color-surface-tint); }
 .ui-button-primary { background: var(--color-blue); border-color: var(--color-blue); color: var(--color-surface); }
@@ -94,7 +94,7 @@ h1, h2 { font-weight: var(--font-weight-semibold); }
 .ui-control::placeholder { color: var(--color-muted); opacity: 1; }
 textarea.ui-control { min-height: 96px; resize: vertical; }
 .ui-control[aria-invalid="true"] { border-color: var(--color-red); }
-.ui-select-compact { height: var(--button-height); min-height: var(--button-height); padding: 0 var(--button-padding-x); padding-right: calc(var(--dropdown-chevron-pad) + 14px + var(--dropdown-chevron-pad)); border-radius: var(--button-radius); font-size: var(--text-xs); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: calc(100% - var(--dropdown-chevron-pad)) center; background-size: 14px 14px; }
+.ui-select-compact { height: var(--button-height); min-height: var(--button-height); padding: 0 var(--button-padding-x); padding-right: calc(var(--dropdown-chevron-pad) + 14px + var(--dropdown-chevron-pad)); border: 1px solid var(--color-border); border-radius: var(--button-radius); font-size: var(--text-xs); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: calc(100% - var(--dropdown-chevron-pad)) center; background-size: 14px 14px; }
 .ui-help { color: var(--color-muted); font-size: var(--text-sm); }
 .ui-error { color: var(--color-red); font-size: var(--text-sm); }
 .ui-checkbox { display: flex; align-items: center; gap: var(--spacing-2\.5); min-height: var(--control-height); }
@@ -248,7 +248,7 @@ textarea.ui-control { min-height: 96px; resize: vertical; }
   .workspace :is(a, button):focus-visible, .ui-dialog :focus-visible, .ui-table-scroll:focus-visible, :focus-visible { outline: 2px solid Highlight; outline-offset: var(--focus-offset); }
   select { appearance: auto; background-image: none; }
 }
-.telemetry-recovery { min-height: 100dvh; display: grid; align-content: center; padding: 24px; }
-.telemetry-recovery > .ui-card { width: min(100%, 540px); margin-inline: auto; }
-.telemetry-recovery h1 { font-size: var(--text-2xl); font-weight: 600; }
-.telemetry-recovery p { margin: 12px 0 24px; color: var(--color-gray-600); }
+.recovery-boundary { min-height: 100dvh; display: grid; align-content: center; padding: 24px; }
+.recovery-boundary > .ui-card { width: min(100%, 540px); margin-inline: auto; }
+.recovery-boundary h1 { font-size: var(--text-2xl); font-weight: 600; }
+.recovery-boundary p { margin: 12px 0 24px; color: var(--color-gray-600); }

@@ -24,7 +24,7 @@ Create and edit tasks, update progress, mark complete for approval, carry tasks,
 - [x] Build it: `/develop employee task lifecycle`
   - [x] Compose the inspected task forms, action menus and confirmations, including the approved status only and error adjustments (AC-1, AC-10).
   - [x] Apply and verify task revisions and receipts, fresh write guards, and safe read capabilities (AC-2, AC-3, AC-8, AC-9, AC-11).
-  - [x] Implement task changes, immediate carry, review attempts, atomic notifications and post commit telemetry (AC-2 through AC-9).
+  - [x] Implement task changes, immediate carry, review attempts and atomic notifications (AC-2 through AC-9). Post commit telemetry was removed 2026-11-04 with the telemetry foundation.
   - [x] Connect retained drafts, retry identity, conflict reload and confirmed refresh behavior (AC-1, AC-8, AC-10).
   - [x] Run regression, concurrency, rollback and real application checks in development and production (AC-1 through AC-11).
 - [ ] Verify it: `/check verify employee task lifecycle`

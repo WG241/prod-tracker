@@ -68,7 +68,7 @@ async function submit(tx: Tx, task: WeeklyTask, start: Date, fresh: Awaited<Retu
   return request.id
 }
 
-export async function mutateTask(db: PrismaClient, context: SessionContext, sessionId: string, requestId: string, op: TaskOperation, onSubmitted: (at: string) => void = () => {}) {
+export async function mutateTask(db: PrismaClient, context: SessionContext, sessionId: string, requestId: string, op: TaskOperation) {
   const request = operationRequest(op)
   const hash = createHash('sha256').update(JSON.stringify({ kind: op.kind, path: request.path, body: request.body, revision: request.revision ?? null })).digest('hex')
   for (let attempt = 0; ; attempt++) {
@@ -187,7 +187,6 @@ export async function mutateTask(db: PrismaClient, context: SessionContext, sess
         await tx.taskMutationReceipt.create({ data: { userId, requestId, operation: op.kind, requestHash: hash, taskId: task.id, result: stored, createdAt: at } })
         return result
       }, { isolationLevel: 'ReadCommitted', maxWait: 5000, timeout: 15000 })
-      if (result.approvalRequestId && !result.replayed) { try { onSubmitted(result.appliedAt) } catch { /* Delivery cannot undo committed work. */ } }
       return result
     } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? error.code : null

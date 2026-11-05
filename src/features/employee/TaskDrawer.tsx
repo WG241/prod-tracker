@@ -55,16 +55,16 @@ export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, oper
 }
 
 function Reply({ task, operations, disabled, onSessionInvalid }: { task: TaskEntry; operations: TaskOperations; disabled: boolean; onSessionInvalid: () => void }) {
-  const store = useTaskOperations(operations), key = `COMMENT:${task.id}`, record = store.get(key)
-  const [body, setBody] = useState(() => record?.operation.kind === 'COMMENT' && ['pending', 'uncertain'].includes(record.state) ? record.operation.body : '')
+  const store = useTaskOperations(operations), key = `COMMENT:${task.id}`, draftKey = `FORM:${key}`, record = store.get(key)
+  const [body, setBody] = useState(() => record?.operation.kind === 'COMMENT' && ['pending', 'uncertain'].includes(record.state) ? record.operation.body : store.getDraft<string>(draftKey) ?? '')
   const bodyRef = useRef(body)
   const ref = useRef<HTMLTextAreaElement>(null)
   const validation = useFormValidation({ fields: [{ name: 'body', label: 'Reply', ref }], validate: () => !bodyRef.current.trim() || bodyRef.current.trim().length > 4000 ? { body: 'Enter a reply of 1 to 4,000 characters.' } : {} })
   const seen = useRef(record?.state)
   useEffect(() => {
-    if (record?.state === 'committed' && seen.current !== 'committed') { bodyRef.current = ''; setBody('') }
+    if (record?.state === 'committed' && seen.current !== 'committed') { bodyRef.current = ''; setBody(''); store.discardDraft(draftKey) }
     seen.current = record?.state
-  }, [record?.state])
+  }, [record?.state, store, draftKey])
   const pending = record?.state === 'pending', uncertain = record?.state === 'uncertain'
-  return <form className="employee-reply" noValidate onSubmit={(event) => { event.preventDefault(); if (!disabled && !pending && (uncertain || validation.submit())) void store.send({ kind: 'COMMENT', taskId: task.id, body: body.trim() }, onSessionInvalid) }}><TextareaField ref={ref} label="Reply" value={body} maxLength={4000} disabled={disabled} {...pendingTextProps(pending || uncertain)} placeholder="Add a helpful update…" error={validation.errors.body || record?.fields?.body} onChange={(event) => { bodyRef.current = event.target.value; setBody(event.target.value); validation.revalidate('body') }} /><Button type="submit" busy={pending} disabled={disabled}>{uncertain ? 'Retry' : 'Post reply'}</Button>{record?.error && <><p className="ui-error">{record.error}</p><AnnounceEvent event={{ id: `${record.id}:${record.state}`, message: record.error, intent: 'alert' }} /></>}</form>
+  return <form className="employee-reply" noValidate onSubmit={(event) => { event.preventDefault(); if (!disabled && !pending && (uncertain || validation.submit())) { store.discardDraft(draftKey); void store.send({ kind: 'COMMENT', taskId: task.id, body: body.trim() }, onSessionInvalid) } }}><TextareaField ref={ref} label="Reply" value={body} maxLength={4000} disabled={disabled} {...pendingTextProps(pending || uncertain)} placeholder="Add a helpful update…" error={validation.errors.body || record?.fields?.body} onChange={(event) => { bodyRef.current = event.target.value; setBody(event.target.value); store.setDraft(draftKey, event.target.value); validation.revalidate('body') }} /><Button type="submit" busy={pending} disabled={disabled}>{uncertain ? 'Retry' : 'Post reply'}</Button>{record?.error && <><p className="ui-error">{record.error}</p><AnnounceEvent event={{ id: `${record.id}:${record.state}`, message: record.error, intent: 'alert' }} /></>}</form>
 }

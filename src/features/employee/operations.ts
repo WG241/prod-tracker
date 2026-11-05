@@ -11,14 +11,21 @@ export class TaskOperations {
   private listeners = new Set<() => void>()
   private records = new Map<string, OperationRecord>()
   private controllers = new Set<AbortController>()
+  // Unsent form text, keyed like operation records. Survives foreground
+  // revalidation's temporary unmount; cleared with everything else on sign
+  // out or identity change so a new actor never inherits it.
+  private drafts = new Map<string, unknown>()
   commits = 0
   notice = ''
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   snapshot = () => this.version
   private emit() { this.version++; this.listeners.forEach((listener) => listener()) }
   bind(actor: string) { if (this.actor !== actor) { this.clear(); this.actor = actor } }
-  clear() { this.generation++; this.actor = ''; this.records.clear(); this.controllers.forEach((c) => c.abort()); this.controllers.clear(); this.notice = ''; this.emit() }
+  clear() { this.generation++; this.actor = ''; this.records.clear(); this.controllers.forEach((c) => c.abort()); this.controllers.clear(); this.drafts.clear(); this.notice = ''; this.emit() }
   get(key: string) { return this.records.get(key) }
+  getDraft<T>(key: string) { return this.drafts.get(key) as T | undefined }
+  setDraft(key: string, value: unknown) { this.drafts.set(key, value) }
+  discardDraft(key: string) { this.drafts.delete(key) }
   carryRecord() { return Array.from(this.records.values()).reverse().find((r) => r.operation.kind === 'CARRY' && r.state !== 'committed') }
   discard(key: string) { const old = this.records.get(key); if (old?.state !== 'pending' && old?.state !== 'uncertain') { this.records.delete(key); this.emit() } }
   async send(operation: TaskOperation, invalid: () => void) {
