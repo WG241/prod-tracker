@@ -21,14 +21,15 @@ function originAllowed(request: Request, config: AuthConfig, mutation: boolean) 
     && (!site || site === 'same-origin' || (!mutation && site === 'none'))
 }
 
-function fail(response: Response, error: unknown) {
+function sendFailure(response: Response, error: unknown) {
   const failure = error instanceof AuthFailure ? error : new AuthFailure('SERVICE_UNAVAILABLE', 503)
-  if (!(error instanceof AuthFailure)) console.error('auth_request_failed')
+  if (!(error instanceof AuthFailure) || error.status >= 500) console.error('Auth API failure', error)
   if (failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
   return response.status(failure.status).json({ error: { code: failure.code, message: failure.message } })
 }
 
 export function registerAuth(api: Router, db: PrismaClient, service: AuthService, config: AuthConfig) {
+  const fail = (response: Response, error: unknown) => sendFailure(response, error)
   const authRouter = express.Router()
   authRouter.use((request, response, next) => {
     response.setHeader('Cache-Control', 'no-store')
@@ -118,7 +119,8 @@ export function registerNavigation(app: express.Express, service: AuthService, d
         : Object.values(roleRoutes).some((role) => role.prefix !== rolePrefix && (request.path === role.prefix || request.path.startsWith(`${role.prefix}/`))) ? '?notice=access-denied' : ''
       response.redirect(303, context.landingPath + notice)
     } catch (error) {
-      if (error instanceof AuthFailure && error.status === 403) return fail(response, error)
+      if (error instanceof AuthFailure && error.status === 403) return sendFailure(response, error)
+      if (!(error instanceof AuthFailure) || error.status >= 500) console.error('Navigation guard failure', error)
       // Serve only the SPA's neutral retry presentation, never a role shell.
       response.status(503)
       // Vite sends HTML with status200. Keep the guard's failure status when

@@ -1,7 +1,7 @@
 # 0006. Accessibility baseline
 
 **Date**: 2026-10-28
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

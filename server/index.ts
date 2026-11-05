@@ -3,7 +3,6 @@ import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
-import type { ErrorRequestHandler } from 'express'
 import type { ViteDevServer } from 'vite'
 import { readConfig } from './config.ts'
 import { createDatabase } from './db.ts'
@@ -13,6 +12,12 @@ import { readAuthConfig } from './auth/config.ts'
 import { createAuth } from './auth/provider.ts'
 import { createAuthService } from './auth/service.ts'
 import { registerAuth, registerNavigation } from './auth/router.ts'
+import { apiErrorHandler, fatalGuard } from './errors.ts'
+import { privateStorage } from './private-storage.ts'
+import { registerEmployee } from './employee/router.ts'
+import { startHistoryCloser } from './employee/history-worker.ts'
+
+fatalGuard()
 
 async function main() {
   const config = readConfig()
@@ -22,6 +27,7 @@ async function main() {
   const app = express()
   const server = createServer(app)
   app.disable('x-powered-by')
+  app.use(privateStorage)
   // Off by default. Only enable after a hosting-specific trusted proxy decision.
   if (config.trustProxy !== false) app.set('trust proxy', config.trustProxy)
 
@@ -29,6 +35,7 @@ async function main() {
   registerHealth(api, prisma)
   registerDataProof(api, prisma, config)
   registerAuth(api, prisma, authService, authConfig)
+  registerEmployee(api, prisma, authService, authConfig)
   api.use((_request, response) => response.status(404).json({ error: 'Not found' }))
   app.use('/api', api)
   registerNavigation(app, authService, config.development)
@@ -37,7 +44,7 @@ async function main() {
   if (config.development) {
     const { createServer: createViteServer } = await import('vite')
     vite = await createViteServer({
-      server: { middlewareMode: true, hmr: { server } },
+      server: { middlewareMode: true, ws: { server } },
       appType: 'spa',
     })
     app.use(vite.middlewares)
@@ -52,28 +59,26 @@ async function main() {
     app.use((_request, response) => response.status(404).json({ error: 'Not found' }))
   }
 
-  const handleError: ErrorRequestHandler = (_error, _request, response, _next) => {
-    console.error('request_failed')
-    if (!response.headersSent) response.status(500).json({ error: 'Internal server error' })
-    else response.end()
-  }
-  app.use(handleError)
+  app.use(apiErrorHandler())
+  const stopHistory = startHistoryCloser(prisma)
 
   let stopping = false
   const shutdown = async () => {
     if (stopping) return
     stopping = true
     const deadline = setTimeout(() => process.exit(1), 10000).unref()
+    const historyStopped = stopHistory()
     const httpClosed = new Promise<void>((done) => server.close(() => done()))
     await vite?.close()
     await httpClosed
+    await historyStopped
     await prisma.$disconnect()
     clearTimeout(deadline)
   }
   process.once('SIGINT', () => void shutdown())
   process.once('SIGTERM', () => void shutdown())
-  server.once('error', () => {
-    console.error('server_listen_failed')
+  server.once('error', (error) => {
+    console.error('Server startup failed', error)
     void shutdown().then(() => { process.exitCode = 1 })
   })
   server.listen(config.port, config.host, () => {
@@ -82,9 +87,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error && /^(DATABASE_URL|PORT|BETTER_AUTH_SECRET|BETTER_AUTH_URL) must/.test(error.message)
-    ? error.message
-    : 'Server startup failed'
-  console.error(message)
+  console.error('Server startup failed', error)
   process.exitCode = 1
 })

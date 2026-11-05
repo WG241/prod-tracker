@@ -61,7 +61,7 @@
   --color-teal: #0f766e;
   --color-amber: #92400e;
   --color-red: #b91c1c;
-  --color-control-border: #d1d5db;
+  --color-control-border: #6b7280;
   --color-declined-fg: #c2410c;
   --color-declined-bg: #fff7ed;
   --color-hold-fg: #5b21b6;
@@ -254,6 +254,12 @@
   --icon-stroke: 1.6;
   --avatar-size: 2.25rem; /* 36px */
   --avatar-size-sm: 1.875rem; /* 30px */
+
+  /* Compact React buttons match the task drawer status selector. */
+  --button-height: var(--control-height-md);
+  --button-radius: var(--radius-lg);
+  --button-padding-y: var(--spacing-1\.5);
+  --button-padding-x: var(--spacing-3);
 
   /* Z-index layers */
   --z-proto: 50;

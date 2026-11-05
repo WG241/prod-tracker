@@ -90,7 +90,7 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
       const expired = await revoke(session, person?.accountStatus === 'INACTIVE', headers)
       return { context: null, headers: expired }
     }
-    return { context: safeContext(staff, session.expiresAt), headers: result.headers }
+    return { context: safeContext(staff, session.expiresAt), headers: result.headers, internalSessionId: session.id }
   }
   async function signIn(email: string, password: string, headers: Headers, emailKey?: string) {
     let result

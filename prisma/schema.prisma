@@ -31,6 +31,7 @@ model User {
   decisions          ApprovalDecision[]     @relation("DecisionActor")
   coveredDecisions   ApprovalDecision[]     @relation("DecisionPrincipal")
   leaves             LeaveRecord[]          @relation("LeaveOwner")
+  leaveMutationReceipts LeaveMutationReceipt[]
   cancelledLeaves    LeaveRecord[]          @relation("LeaveCanceller")
   coveredLeaves      ReliefAssignment[]     @relation("CoveredManager")
   reliefCover        ReliefAssignment[]     @relation("ReliefManager")
@@ -43,6 +44,7 @@ model User {
   auditEvents        AuditEvent[]
   notifications      Notification[]
   authIdentity       AuthUser?
+  taskMutationReceipts TaskMutationReceipt[]
 }
 
 model AuthUser {
@@ -236,6 +238,7 @@ model WorkWeek {
   startsOn         DateTime  @unique @db.Date
   planningLocksAt  DateTime  @db.Timestamptz(3)
   freezesAt        DateTime  @db.Timestamptz(3)
+  rosterCapturedAt DateTime? @db.Timestamptz(3)
   manuallyLockedAt DateTime? @db.Timestamptz(3)
   lockedById       String?
   lockReason       String?
@@ -244,8 +247,93 @@ model WorkWeek {
   lockedBy User?            @relation(fields: [lockedById], references: [id], onDelete: Restrict)
   trackers WeeklyTracker[]
   unlocks  PlanningUnlock[]
+  historySnapshot HistoryWeekSnapshot?
 
   @@index([lockedById])
+}
+
+model HistoryWeekSnapshot {
+  id         String   @id @default(cuid())
+  weekId     String   @unique
+  startsOn   DateTime @db.Date
+  freezesAt  DateTime @db.Timestamptz(3)
+  capturedAt DateTime @db.Timestamptz(3)
+
+  week     WorkWeek              @relation(fields: [weekId], references: [id], onDelete: Restrict)
+  persons  HistoryPersonSnapshot[]
+  tasks    HistoryTaskSnapshot[]
+
+  @@index([startsOn])
+}
+
+model HistoryPersonSnapshot {
+  id                          String   @id @default(cuid())
+  historyWeekId               String
+  userId                      String
+  assignmentId                String
+  contextSnapshot             Json
+  expectedWorkingDaysSnapshot Int
+  snapshotAt                  DateTime @db.Timestamptz(3)
+
+  historyWeek HistoryWeekSnapshot @relation(fields: [historyWeekId], references: [id], onDelete: Restrict)
+
+  @@unique([historyWeekId, userId])
+  @@index([userId, snapshotAt])
+}
+
+model HistoryTaskSnapshot {
+  id             String     @id
+  historyWeekId  String
+  ownerId        String
+  ownerName      String
+  title          String     @db.VarChar(120)
+  activity       String
+  startsOn       DateTime   @db.Date
+  endsOn         DateTime   @db.Date
+  status         TaskStatus
+  blockerReason  String?
+  carryRequested Boolean
+  carriedFrom    Boolean
+  revision       Int
+  createdAt      DateTime   @db.Timestamptz(3)
+
+  historyWeek HistoryWeekSnapshot   @relation(fields: [historyWeekId], references: [id], onDelete: Restrict)
+  comments    HistoryCommentSnapshot[]
+  reviews     HistoryReviewSnapshot[]
+
+  @@index([historyWeekId, ownerId])
+  @@index([historyWeekId, startsOn])
+}
+
+model HistoryCommentSnapshot {
+  id             String   @id
+  taskSnapshotId String
+  body           String
+  authorName     String
+  createdAt      DateTime @db.Timestamptz(3)
+
+  task HistoryTaskSnapshot @relation(fields: [taskSnapshotId], references: [id], onDelete: Restrict)
+
+  @@index([taskSnapshotId, createdAt])
+}
+
+model HistoryReviewSnapshot {
+  id                 String         @id
+  taskSnapshotId     String
+  attemptNumber      Int
+  state              ApprovalState
+  submittedAt        DateTime       @db.Timestamptz(3)
+  decision           DecisionKind?
+  method             DecisionMethod?
+  reason             String?
+  decidedAt          DateTime?      @db.Timestamptz(3)
+  reviewerName       String?
+  coveredManagerName String?
+
+  task HistoryTaskSnapshot @relation(fields: [taskSnapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([taskSnapshotId, attemptNumber])
+  @@index([taskSnapshotId, attemptNumber])
 }
 
 model WeeklyTracker {
@@ -298,6 +386,7 @@ model WeeklyTask {
   deletedAt      DateTime?  @db.Timestamptz(3)
   createdAt      DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  revision       Int        @default(0)
 
   owner         User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   series        TaskSeries        @relation(fields: [seriesId, ownerId], references: [id, ownerId], onDelete: Restrict)
@@ -307,6 +396,7 @@ model WeeklyTask {
   comments      TaskComment[]
   approvals     ApprovalRequest[]
   notifications Notification[]
+  mutationReceipts TaskMutationReceipt[]
 
   @@unique([seriesId, trackerId])
   @@unique([id, ownerId])
@@ -316,6 +406,22 @@ model WeeklyTask {
   @@index([seriesId, ownerId])
   @@index([trackerId, ownerId])
   @@index([carriedFromId, seriesId])
+}
+
+model TaskMutationReceipt {
+  userId      String
+  requestId   String   @db.Uuid
+  operation   String
+  requestHash String   @db.Char(64)
+  taskId      String
+  result      Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  task WeeklyTask @relation(fields: [taskId, userId], references: [id, ownerId], onDelete: Restrict)
+
+  @@id([userId, requestId])
+  @@index([taskId, userId])
 }
 
 model TaskComment {
@@ -392,10 +498,26 @@ model LeaveRecord {
   cancelledBy   User?              @relation("LeaveCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
   relief        ReliefAssignment[]
   notifications Notification[]
+  mutationReceipts LeaveMutationReceipt[]
 
   @@unique([id, userId])
   @@index([userId, startsOn, expectedReturnOn])
   @@index([cancelledById])
+}
+
+model LeaveMutationReceipt {
+  userId String
+  requestId String @db.Uuid
+  operation String
+  requestHash String @db.Char(64)
+  leaveId String
+  result Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  leave LeaveRecord @relation(fields: [leaveId, userId], references: [id, userId], onDelete: Restrict)
+  @@id([userId, requestId])
+  @@index([leaveId, userId])
 }
 
 model ReliefAssignment {
@@ -424,6 +546,7 @@ model ReliefAssignment {
 
 model TrackerSettings {
   id                  String   @id @default("workforce-group")
+  trackingStartsOn    DateTime? @db.Date
   timezone            String   @default("Africa/Lagos")
   openingDay          Weekday  @default(MONDAY)
   openingTime         String   @default("08:00")

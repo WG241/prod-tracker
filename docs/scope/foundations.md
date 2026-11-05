@@ -99,31 +99,33 @@ Implemented 2026-10-30 against the built Feature 4 shell. The additive auth migr
 Project wide WCAG 2.2 AA target: focus order, labels, dialogs, live regions, contrast. Applies to every later screen.
 **Done when:** shared patterns for dialogs, forms, and nav meet AA checks; later features inherit rather than reinvent.
 - [x] Design it (spec): `/architect accessibility baseline`
-- [ ] Build it: `/develop accessibility baseline`
-  - [ ] Shared contract, prototype references, and built surface inventory (AC-1, AC-9)
-  - [ ] Keyboard, names, validation, navigation, and native overlay behavior (AC-2 through AC-4, AC-6)
-  - [ ] Scoped announcements and measured visual/adaptation corrections (AC-1, AC-5, AC-6)
-  - [ ] Chromium Playwright/axe regression checks through the Node runner (AC-7, AC-9)
+- [x] Build it: `/develop accessibility baseline`
+  - [x] Shared contract, prototype references, and built surface inventory (AC-1, AC-9)
+  - [x] Keyboard, names, validation, navigation, and native overlay behavior (AC-2 through AC-4, AC-6)
+  - [x] Scoped announcements and measured visual/adaptation corrections (AC-1, AC-5, AC-6)
+  - [x] Chromium Playwright/axe regression checks through the Node runner (AC-7, AC-9)
 - [ ] Test it: `/test accessibility baseline`
 - [ ] Verify it: `/check verify accessibility baseline`
   - [ ] Actual keyboard/NVDA, zoom/spacing, and production coverage evidence (AC-8 through AC-10)
-spec [0006](../specs/0006-accessibility-baseline/index.md)
+spec [0006](../specs/0006-accessibility-baseline/index.md) · code in `src/components/accessibility/`, shared controls and consumers, `tests/accessibility/` · [verification](../specs/0006-accessibility-baseline/verify.md)
 
-Design confirmed 2026-10-28 after official standards/tool checks, an independent model cross check, and user approved repairs. The user selected Chromium automation with Playwright Library and axe through Node/tsx, actual NVDA with Chrome or Edge, and first-invalid-field validation. Test it is required by the requested regression coverage despite the Alpha default. Feature 4 must be built first; built Feature 5/6 pages join the coverage inventory, while unbuilt pages are never recorded as passed. Implementation and accessibility verification have not started. Optional Playwright/axe skill and MCP discovery was declined.
+Design confirmed 2026-10-28. Implementation and selected automated verification completed 2026-11-02 against the built shared shell. Shared validation, pending focus, scoped announcements, native modal restoration, responsive navigation, table scrolling and measured contrast corrections are in place. The final selected development run passed 48 cases, production passed 14, and a targeted forced color focus check passed. Full Test and Verify remain open: the user deferred authenticated checks after Neon rejected the saved fixture password, the local proof composer is unavailable with the normal Neon configuration, and actual NVDA/native browser zoom could not run because the Windows UI helper was unavailable. See verify.md and the evidence record for exact coverage. Optional Playwright/axe skill and MCP discovery remain declined. No complete product conformance is claimed.
 
 ### 8. Error monitoring and product analytics · in-progress
 Error monitoring for failed API and client crashes; product analytics for submit, approve, late approval, and role usage. English only product copy.
 **Done when:** errors are visible in a monitoring sink in local or staging config; key product events fire for the Employee and Line Manager loop at minimum.
 - [x] Design it (spec): `/architect error monitoring and product analytics`
 - [ ] Build it: `/develop error monitoring and product analytics`
-  - [ ] Validated records, bounded local files, retention, and inspection commands (AC-1, AC-4 through AC-6)
-  - [ ] Sanitized server/client capture, recovery fallback, and isolated development probes (AC-2 through AC-4)
-  - [ ] Guarded ingestion, real context adapter, and committed event contracts (AC-4, AC-7, AC-8)
+  - [x] Validated records, bounded local files, retention, and inspection commands (AC-1, AC-4 through AC-6)
+  - [x] Sanitized server/client capture, recovery fallback, and isolated development probes (AC-2 through AC-4)
+  - [x] Guarded ingestion, real context adapter, and committed event contracts (AC-4, AC-7, AC-8)
   - [ ] Real Features 10, 17 and 19 event integration, including human, automatic and late approvals (AC-7 through AC-9)
 - [ ] Test it: `/test error monitoring and product analytics`
 - [ ] Verify it: `/check verify error monitoring and product analytics`
   - [ ] Real app error capture, privacy, failure bounds, and production isolation evidence (AC-1 through AC-6, AC-10)
   - [ ] Actual authenticated views, submission and approval workflow evidence, no synthetic substitute (AC-7 through AC-10)
-spec [0007](../specs/0007-error-monitoring-product-analytics/index.md)
+spec 0007 (removed)
 
-Design confirmed 2026-10-28 after official documentation checks, an independent model cross check, and the user approved privacy repair. Local JSON Lines files provide best effort error capture and aggregate role events, with 30 day retention and a 100000000 byte total cap. Business audits remain separate. Focused regression tests are required by the approved spec. Implementation has not started. The foundation can land first, but the feature and final Verify it box remain open until real workflows in Features 10, 17 and 19 pass. Runtime role views require Feature 6; visual prototype control inspection remains required before the approved recovery fallback is built.
+Design confirmed 2026-10-28. Foundation implemented 2026-11-02 in `server/telemetry/`, `src/features/telemetry/` and `scripts/telemetry.ts`. Local files enforced the approved privacy, queue and retention bounds; business audits remained separate. The configured development suite passed 29 checks, with production recovery and off mode verified separately.
+
+Removed 2026-11-04: the local telemetry foundation (code, tests, scripts, and spec 0007 itself) was deleted at the user's request. Error monitoring and product analytics are no longer implemented; this feature is no longer pursued unless re-scoped. Crash containment (`server/errors.ts` `fatalGuard`) and the React recovery boundary (`src/components/RecoveryBoundary.tsx`) were kept, stripped of their reporting calls, since they are general app safety rather than telemetry.

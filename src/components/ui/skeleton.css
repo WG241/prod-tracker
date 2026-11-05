@@ -1,0 +1,76 @@
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-tint);
+  border-radius: var(--radius-lg);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-surface) 60%, transparent), transparent);
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+.skeleton-text {
+  height: var(--text-base);
+  border-radius: var(--radius-sm);
+}
+.skeleton-text-short { width: 40%; }
+.skeleton-text-medium { width: 65%; }
+.skeleton-text-long { width: 90%; }
+.skeleton-circle {
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+.skeleton-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 23px 0;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+.skeleton-row:last-child { border-bottom: 0; }
+.skeleton-row .skeleton-text + .skeleton-text { margin-top: 10px; }
+.skeleton-row-body { flex: 1; min-width: 0; }
+.skeleton-row-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.skeleton-badge {
+  width: 72px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+}
+.skeleton-button {
+  width: 96px;
+  height: var(--control-height-sm);
+  border-radius: var(--radius-xl);
+}
+.skeleton-table { width: 100%; border-collapse: collapse; }
+.skeleton-table th, .skeleton-table td {
+  padding: var(--spacing-3\.5) var(--spacing-4);
+  border-bottom: 1px solid var(--color-line-soft);
+}
+.skeleton-table thead th { background: var(--color-surface-subtle); }
+.skeleton-field {
+  display: grid;
+  gap: var(--spacing-1\.5);
+}
+.skeleton-field-label {
+  width: 90px;
+  height: var(--text-sm);
+}
+.skeleton-field-control {
+  height: var(--control-height);
+  border-radius: var(--radius-lg);
+}
+.skeleton-card {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+.skeleton-block { height: 120px; border-radius: var(--radius-3xl); }
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+}

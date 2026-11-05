@@ -2,9 +2,25 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import { PrismaClient } from '../src/generated/prisma/client.ts'
 
+export function databaseErrorCode(error: unknown, depth = 0): string | null {
+  if (!error || typeof error !== 'object' || depth > 4) return null
+  const record = error as Record<string, unknown>
+  for (const key of ['meta', 'driverAdapterError', 'cause'] as const) {
+    if (key in record) {
+      const code = databaseErrorCode(record[key], depth + 1)
+      if (code) return code
+    }
+  }
+  return 'code' in error && typeof error.code === 'string' ? error.code : null
+}
+
 export function createDatabase(connectionString: string) {
+  // PrismaPg normalizes timestamptz values assuming a UTC database session.
+  // URL options override Pool options, so append this setting to the URL itself.
+  const target = new URL(connectionString)
+  target.searchParams.set('options', `${target.searchParams.get('options') ?? ''} -c timezone=UTC`.trim())
   const pool = new pg.Pool({
-    connectionString,
+    connectionString: target.href,
     max: 5,
     connectionTimeoutMillis: 3000,
     query_timeout: 5000,
@@ -13,7 +29,7 @@ export function createDatabase(connectionString: string) {
   })
   const adapter = new PrismaPg(pool, {
     disposeExternalPool: true,
-    onPoolError: () => console.error('database_pool_unavailable'),
+    onPoolError: (error) => console.error('Database pool error', error),
   })
   return new PrismaClient({ adapter, errorFormat: 'minimal' })
 }

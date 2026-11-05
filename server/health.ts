@@ -7,8 +7,8 @@ export function registerHealth(router: Router, prisma: PrismaClient) {
     try {
       await prisma.user.findFirst({ select: { id: true } })
       response.json({ status: 'ok', database: 'connected' })
-    } catch {
-      console.error('database_health_unavailable')
+    } catch (error) {
+      console.error('Health check: database unavailable', error)
       response.status(503).json({ status: 'unavailable', database: 'unavailable' })
     }
   })

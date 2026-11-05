@@ -25,6 +25,11 @@ async function fingerprint() {
     prisma.auditEvent.findMany({ orderBy: { id: 'asc' } }),
     prisma.notification.findMany({ orderBy: { id: 'asc' } }),
     prisma.emailDelivery.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historyWeekSnapshot.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historyPersonSnapshot.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historyTaskSnapshot.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historyCommentSnapshot.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historyReviewSnapshot.findMany({ orderBy: { id: 'asc' } }),
   ])
   return createHash('sha256').update(JSON.stringify(rows)).digest('hex')
 }
@@ -74,12 +79,13 @@ try {
     'User','Business','Unit','EmploymentAssignment','WorkWeek','WeeklyTracker','TaskSeries','WeeklyTask','TaskComment',
     'ApprovalRequest','ApprovalDecision','LeaveRecord','ReliefAssignment','TrackerSettings','PlanningUnlock','AuditEvent','Notification','EmailDelivery',
     'AuthUser','AuthAccount','AuthSession','AuthVerification','LoginThrottle',
+    'HistoryWeekSnapshot','HistoryPersonSnapshot','HistoryTaskSnapshot','HistoryCommentSnapshot','HistoryReviewSnapshot',
   ].sort())
   const triggers = await client.query<{ tgname: string }>('SELECT tgname FROM pg_trigger WHERE NOT tgisinternal')
-  for (const name of ['audit_append_only','decision_append_only','submission_evidence_guard','frozen_roster_guard']) {
+  for (const name of ['audit_append_only','decision_append_only','submission_evidence_guard','frozen_roster_guard','history_closed_task_guard','history_week_snapshot_immutable']) {
     assert.ok(triggers.rows.some((row) => row.tgname === name), `Missing live history guard: ${name}`)
   }
-  console.info('PASS live PostgreSQL schema: 23 model tables and four history guards')
+  console.info('PASS live PostgreSQL schema: 28 model tables and six history guards')
   const staff = await prisma.user.count({ where: { assignments: { some: {} } } })
   assert.equal(staff, 28)
   assert.equal(await prisma.weeklyTask.count(), 35)

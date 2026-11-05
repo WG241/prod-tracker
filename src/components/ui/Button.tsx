@@ -3,10 +3,14 @@ import type { ButtonHTMLAttributes } from 'react'
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'default' | 'primary' | 'success' | 'danger' | 'ghost'
   size?: 'normal' | 'small'
+  busy?: boolean
 }
 
-export function Button({ variant = 'default', size = 'normal', type = 'button', className = '', ...props }: ButtonProps) {
-  return <button type={type} className={`ui-button ui-button-${variant} ui-button-${size} ${className}`} {...props} />
+export function Button({ variant = 'default', size = 'normal', type = 'button', className = '', busy = false, onClick, ...props }: ButtonProps) {
+  return <button type={type} className={`ui-button ui-button-${variant} ui-button-${size} ${className}`} {...props} aria-busy={busy || undefined} aria-disabled={busy || props['aria-disabled']} onClick={(event) => {
+    if (busy || props['aria-disabled'] === true || props['aria-disabled'] === 'true') { event.preventDefault(); return }
+    onClick?.(event)
+  }} />
 }
 
 type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'> & {

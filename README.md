@@ -65,10 +65,36 @@ Other useful commands:
 | `npm run auth:prune` | Remove expired sessions and throttle windows |
 | `npm run test:setup` | Migrate and seed the separate authentication test database |
 | `npm test` | Type check the tests and run the Node and HTTP authentication suite |
+| `npm run test:employee` | Check Employee Home calendar rules and authenticated read APIs against the separate test database |
+| `npm run test:employee:browser` | Check the running Employee Home with Chromium and axe, using the fictional Employee credential |
+| `npm run test:employee:lifecycle` | Check guarded writes, revisions, retries, review/carry history and rollback against the separate test database |
+| `npm run test:employee:history` | Check frozen History reads, safe capture, concurrency, source guards, catch-up and rollback against the separate test database |
+| `npm run test:employee:history:browser` | Check History filters, drawers, recovery and accessibility against isolated app ports 3001 or 3002 |
+| `npm run test:employee:leave` | Check leave dates, races, safe retry, recipients, history protection and rollback against the separate test database |
+| `npm run test:employee:leave:browser` | Check leave, Home return, drafts, recovery and accessibility against isolated app ports 3001 or 3002 |
+| `npm run history:capture -- [--week YYYY-MM-DD] [--user-id ID] [--apply]` | Diagnose historical capture privately, or safely retry with `--apply` |
+| `npm run history:close -- YYYY-MM-DD` | Publish one complete immutable weekly history snapshot |
+| `npm run test:employee:lifecycle:browser` | Check real task flows, response loss recovery, conflicts and page repair against isolated app ports 3001 or 3002 |
+| `npm run test:employee:app` | Launch the compiled app on port 3001 using TEST_DATABASE_URL; add `-- --dev` for the development app on port 3002, after building |
+| `npm run test:employee:pagination` | Check 26 record pagination against a running app on the separate test database |
+| `npm run test:a11y:install` | Install the selected Chromium binary once |
+| `npm run test:a11y` | Type check and run the required Chromium accessibility inventory against the running app |
 
 Coding conventions are in `AGENTS.md`. `.editorconfig` supplies editor whitespace defaults. There is no standalone formatter. The Node test runner uses tsx and requires a separate explicit `TEST_DATABASE_URL` (not the ordinary Neon development database). `npm run check` checks tooling; `/check verify` still exercises feature behavior in the running app.
 
 Sign in configuration, trusted provisioning, recovery from interrupted provisioning, local test setup and proxy limits are documented in [auth operations](docs/auth-operations.md). Real workspaces use the person's current database role. Development previews remain at `/__ui`, `/__ui?view=workspace` and `/__data-proof` and cannot establish a session.
+
+Shared keyboard, validation, modal and announcement patterns are documented in [accessibility](docs/accessibility.md). Accessibility tests use Playwright Library and axe through the existing Node runner. `A11Y_BASE_URL` selects a loopback app origin and `A11Y_TARGET` selects development or production coverage. Actual NVDA and browser zoom checks remain separate acceptance evidence.
+
+Employee Home at `/employee/home` reads persisted own tasks with List and Card views, date selection, attention reasons and a task detail drawer. Feature 10 enables current Employee task creation, editing, status changes, completion for review, comments, carry and soft deletion. Planning closure, leave, freeze and approved records are enforced on the server. `EMPLOYEE_BASE_URL` selects the browser suite's loopback origin (default `http://127.0.0.1:5173`); `EMPLOYEE_TARGET` names its evidence directory under `.local/verification/feature9/`. The suite uses `LOCAL_AUTH_TEST_PASSWORD` for the existing fictional Ada account and never writes domain fixtures to the development database. API fixture tests require the separate `TEST_DATABASE_URL`.
+
+Employee History at `/employee/history` reads owned frozen weeks with intersecting week, date and status filters, pages of 25 and a read only task drawer. A Saturday close publishes the employee, task, comment and review snapshots in one transaction. The app runs the close at startup for missed weeks and schedules the next Africa/Lagos Saturday boundary. Existing valid tracker snapshots remain readable while the new immutable snapshot tables are introduced. Uncertain older facts or corrupt records stay unavailable for a separately reviewed repair.
+
+Employee Leave at `/employee/leave` records one current or upcoming period without approval. Future leave is Scheduled and can be cancelled before its start. Current leave pauses task writes and can end through the Leave or Home return button. Return records the current Africa/Lagos date and does not unlock planning or change tasks. Each changed action atomically stores notification rows, an audit and a retry receipt. Missing manager or HR configuration produces a saved warning; database failures roll back the action. The browser suite uses fresh fictional fixtures only on the isolated test app. See [spec 0011](docs/specs/0011-employee-leave/index.md) and its [verification checklist](docs/specs/0011-employee-leave/verify.md).
+
+The private `history:capture` command defaults to diagnostics. A person selector requires a Monday week selector. `--apply` uses the same guarded capture path, performs one bounded pass and cannot overwrite a frozen snapshot. Exit codes are 0 for the requested complete result, 2 for remaining or repair work and 1 for invalid arguments or an operational failure. A successful person result does not certify the whole roster. No override, snapshot input or arbitrary historical backfill is provided. See [spec 0010](docs/specs/0010-employee-history/index.md) and its [verification checklist](docs/specs/0010-employee-history/verify.md).
+
+The pagination browser suite uses the isolated `feature9.employee@example.invalid` fixture created by `test:employee`. Start a compiled app configured with the separate test database on loopback port 3001 first, then run `npm run test:employee:pagination`. Its app origin and `BETTER_AUTH_URL` must agree. `EMPLOYEE_PAGINATION_BASE_URL` selects another loopback origin when needed. It never provisions this test account into ordinary development data.
 
 ## Architecture and connection check
 
@@ -257,3 +283,5 @@ Resume from the last commit and unstaged files. Continue the first unticked box 
 ## License / internal use
 
 Internal Workforce Group tool for this release (single organisation, no billing).
+
+Feature 10 verification and the two outstanding manual accessibility checks are recorded in [its checklist](docs/specs/0009-employee-task-lifecycle/verify.md). For its mutating browser suite, build, run `test:setup`, launch `test:employee:app` in a separate terminal, set `EMPLOYEE_BASE_URL` to that isolated origin and `EMPLOYEE_TARGET` to the app mode, then run `test:employee:lifecycle:browser`. Ordinary Neon development data is never the automated fixture target.

@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { X } from 'lucide-react'
 import { IconButton } from './Button.tsx'
+import { ModalAnnouncements } from '../accessibility/Announcements.tsx'
 
 type DialogProps = {
   open: boolean
@@ -38,30 +39,32 @@ function ModalFrame({ open, title, description, children, footer, onClose, size 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     dialog.showModal()
-    const focusTarget = callbacks.current.initialFocusRef?.current ?? dialog.querySelector<HTMLElement>('[data-modal-close]') ?? dialog
+    const focusTarget = callbacks.current.initialFocusRef?.current ?? dialog.querySelector<HTMLElement>('.ui-dialog-body :is(input, select, textarea, a[href], button):not(:disabled)') ?? dialog.querySelector<HTMLElement>('[data-modal-close]') ?? dialog
     focusTarget.focus()
     return () => {
       dialog.close()
       document.body.style.overflow = previousOverflow
       const target = returnTarget()
-      if (target?.isConnected && !target.matches(':disabled')) target.focus()
+      if (target?.isConnected && target.getClientRects().length && !target.matches(':disabled, [inert] *')) target.focus()
       else fallbackTarget()?.focus()
     }
   }, [open])
 
   return (
     <dialog ref={ref} className={`ui-dialog ui-dialog-${size} ${drawer ? 'ui-drawer' : ''}`} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onCancel={(event) => { event.preventDefault(); onClose() }} onClose={() => { if (open && !ref.current?.open) onClose() }} onKeyDown={(event) => {
+      // Retain Feature 4's boundary wrapping. Native modality owns background inertness.
       if (event.key !== 'Tab') return
-      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')).filter((element) => element.getClientRects().length > 0)
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')).filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0)
       const first = controls[0]
-      const last = controls[controls.length - 1]
-      if (!first) { event.preventDefault(); event.currentTarget.focus() }
-      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+      const last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }}>
+      <ModalAnnouncements open={open}>
       <header className="ui-dialog-head"><h2 id={titleId}>{title}</h2><IconButton label="Close dialog" data-modal-close onClick={onClose}><X aria-hidden="true" /></IconButton></header>
       <div className="ui-dialog-body">{description && <p className="ui-dialog-description" id={descriptionId}>{description}</p>}{children}</div>
       {footer && <footer className="ui-dialog-footer">{footer}</footer>}
+      </ModalAnnouncements>
     </dialog>
   )
 }
