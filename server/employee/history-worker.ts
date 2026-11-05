@@ -6,6 +6,7 @@ import { ensureWeek } from './write-context.ts'
 import { capturePerson, captureTransaction, completeRoster, initializeHistory } from './history-capture.ts'
 import type { CaptureResult } from './history-capture.ts'
 import { databaseClock, historyEvidence, historySources, protection } from './history-evidence.ts'
+import { closeDueHistory, nextSaturdayClose } from './history-snapshot.ts'
 
 export type HistoryCursor = { coverage: string | null; person: { week: string; userId: string } | null; completion: string | null; phase: number; retry: Map<string, number> }
 export function historyCursor(): HistoryCursor { return { coverage: null, person: null, completion: null, phase: 0, retry: new Map() } }
@@ -154,14 +155,23 @@ export async function historyPass(db: PrismaClient, cursor: HistoryCursor, apply
   if (scope.week && (await db.workWeek.findUnique({ where: { startsOn: day(scope.week) } }))?.rosterCapturedAt) report.remaining = false
   return report
 }
-export function startHistoryWorker(db: PrismaClient) {
-  const cursor = historyCursor()
-  let stopped = false, active: Promise<unknown> | null = null
-  const tick = () => {
-    if (stopped || active) return
-    active = historyPass(db, cursor, true, {}, () => stopped).catch((error: unknown) => logDiagnostic('HISTORY_CAPTURE_FAILED', 'background', 'history-capture', error)).finally(() => { active = null })
+export function startHistoryCloser(db: PrismaClient) {
+  let stopped = false, active: Promise<unknown> | null = null, timer: NodeJS.Timeout | null = null
+  const schedule = () => {
+    if (stopped) return
+    const delay = Math.max(1000, nextSaturdayClose(new Date()).getTime() - Date.now())
+    timer = setTimeout(run, delay).unref()
   }
-  const timer = setInterval(tick, 60000).unref()
-  tick()
-  return async () => { stopped = true; clearInterval(timer); await active }
+  const run = () => {
+    if (stopped || active) return
+    active = initializeHistory(db).then(async (initialized) => {
+      if (!['CAPTURED', 'ALREADY_CAPTURED'].includes(initialized.code)) {
+        logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', initialized.code)
+        return []
+      }
+      return closeDueHistory(db)
+    }).catch((error: unknown) => logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', error)).finally(() => { active = null; schedule() })
+  }
+  run()
+  return async () => { stopped = true; if (timer) clearTimeout(timer); await active }
 }

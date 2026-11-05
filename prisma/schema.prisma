@@ -247,8 +247,93 @@ model WorkWeek {
   lockedBy User?            @relation(fields: [lockedById], references: [id], onDelete: Restrict)
   trackers WeeklyTracker[]
   unlocks  PlanningUnlock[]
+  historySnapshot HistoryWeekSnapshot?
 
   @@index([lockedById])
+}
+
+model HistoryWeekSnapshot {
+  id         String   @id @default(cuid())
+  weekId     String   @unique
+  startsOn   DateTime @db.Date
+  freezesAt  DateTime @db.Timestamptz(3)
+  capturedAt DateTime @db.Timestamptz(3)
+
+  week     WorkWeek              @relation(fields: [weekId], references: [id], onDelete: Restrict)
+  persons  HistoryPersonSnapshot[]
+  tasks    HistoryTaskSnapshot[]
+
+  @@index([startsOn])
+}
+
+model HistoryPersonSnapshot {
+  id                          String   @id @default(cuid())
+  historyWeekId               String
+  userId                      String
+  assignmentId                String
+  contextSnapshot             Json
+  expectedWorkingDaysSnapshot Int
+  snapshotAt                  DateTime @db.Timestamptz(3)
+
+  historyWeek HistoryWeekSnapshot @relation(fields: [historyWeekId], references: [id], onDelete: Restrict)
+
+  @@unique([historyWeekId, userId])
+  @@index([userId, snapshotAt])
+}
+
+model HistoryTaskSnapshot {
+  id             String     @id
+  historyWeekId  String
+  ownerId        String
+  ownerName      String
+  title          String     @db.VarChar(120)
+  activity       String
+  startsOn       DateTime   @db.Date
+  endsOn         DateTime   @db.Date
+  status         TaskStatus
+  blockerReason  String?
+  carryRequested Boolean
+  carriedFrom    Boolean
+  revision       Int
+  createdAt      DateTime   @db.Timestamptz(3)
+
+  historyWeek HistoryWeekSnapshot   @relation(fields: [historyWeekId], references: [id], onDelete: Restrict)
+  comments    HistoryCommentSnapshot[]
+  reviews     HistoryReviewSnapshot[]
+
+  @@index([historyWeekId, ownerId])
+  @@index([historyWeekId, startsOn])
+}
+
+model HistoryCommentSnapshot {
+  id             String   @id
+  taskSnapshotId String
+  body           String
+  authorName     String
+  createdAt      DateTime @db.Timestamptz(3)
+
+  task HistoryTaskSnapshot @relation(fields: [taskSnapshotId], references: [id], onDelete: Restrict)
+
+  @@index([taskSnapshotId, createdAt])
+}
+
+model HistoryReviewSnapshot {
+  id                 String         @id
+  taskSnapshotId     String
+  attemptNumber      Int
+  state              ApprovalState
+  submittedAt        DateTime       @db.Timestamptz(3)
+  decision           DecisionKind?
+  method             DecisionMethod?
+  reason             String?
+  decidedAt          DateTime?      @db.Timestamptz(3)
+  reviewerName       String?
+  coveredManagerName String?
+
+  task HistoryTaskSnapshot @relation(fields: [taskSnapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([taskSnapshotId, attemptNumber])
+  @@index([taskSnapshotId, attemptNumber])
 }
 
 model WeeklyTracker {

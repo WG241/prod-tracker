@@ -101,6 +101,29 @@ function frozenOwner(value: Prisma.JsonValue, ownerId: string): DetailResponse['
 export async function readDetail(db: PrismaClient, context: SessionContext, taskId: string, query: Query, asOf: Date): Promise<DetailResponse> {
   return db.$transaction(async (tx) => {
     const { person, assignment } = await employeePrincipal(tx, context, asOf)
+    const historical = await tx.historyTaskSnapshot.findFirst({ where: { id: taskId, ownerId: context.user.id }, include: {
+      historyWeek: { include: { persons: { where: { userId: context.user.id } } } },
+      comments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+      reviews: { orderBy: { attemptNumber: 'desc' } },
+    } })
+    if (historical) {
+      const ownerContext = historical.historyWeek.persons[0]?.contextSnapshot
+      const owner = ownerContext ? frozenOwner(ownerContext, context.user.id) : { name: historical.ownerName, business: null, unit: null, manager: null, department: null }
+      const state = await employeeCalendar(tx, context, asOf, historical.historyWeek.startsOn, assignment)
+      if (!state.week) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
+      const latest = historical.reviews[0]
+      const commentsTotal = historical.comments.length
+      const commentsSkip = pageOffset(query.commentPage, commentsTotal)
+      const comments = commentsSkip === null ? [] : historical.comments.slice(commentsSkip, commentsSkip + 25)
+      const declined = latest?.decision === 'DECLINE' ? latest.reason : null
+      return {
+        ...clock(asOf), nextChangeAt: state.nextChangeAt,
+        task: { id: historical.id, revision: historical.revision, permissions: taskPermissions(historical.status, historical.historyWeek.capturedAt, state.week, asOf), title: historical.title, activity: historical.activity, startsOn: isoDay(historical.startsOn), endsOn: isoDay(historical.endsOn), status: historical.status, carryRequested: historical.carryRequested, carriedFrom: historical.carriedFrom, week: isoDay(historical.historyWeek.startsOn), reason: historical.status === 'BLOCKED' ? historical.blockerReason : historical.status === 'DECLINED' ? declined : null },
+        owner, week: state.week, frozen: true,
+        review: latest ? { attempt: latest.attemptNumber, state: latest.state, submittedAt: latest.submittedAt.toISOString(), decision: latest.decision ? { kind: latest.decision, method: latest.method ?? 'HUMAN', reason: latest.reason, decidedAt: latest.decidedAt?.toISOString() ?? latest.submittedAt.toISOString(), reviewer: latest.reviewerName ?? 'Staff member', coveredManager: latest.coveredManagerName } : null } : null,
+        comments: { items: comments.map((comment) => ({ id: comment.id, body: comment.body, author: comment.authorName, createdAt: comment.createdAt.toISOString() })), page: query.commentPage, pageSize: 25, total: commentsTotal },
+      }
+    }
     const task = await tx.weeklyTask.findFirst({ where: { id: taskId, ownerId: context.user.id, deletedAt: null, tracker: { userId: context.user.id } }, select: {
       ...taskSelect,
       tracker: { select: { contextSnapshot: true, snapshotAt: true, expectedWorkingDaysSnapshot: true, week: true } },

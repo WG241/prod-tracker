@@ -16,6 +16,7 @@ import { capturePerson, completeRoster, initializeHistory } from '../../server/e
 import { databaseClock, historySources, protection, historyEvidence, snapshotContext } from '../../server/employee/history-evidence.ts'
 import { historyQuery, readHistory } from '../../server/employee/history-reads.ts'
 import { historyCursor, historyPass, historyScope } from '../../server/employee/history-worker.ts'
+import { closeHistoryWeek } from '../../server/employee/history-snapshot.ts'
 import { registerEmployee } from '../../server/employee/router.ts'
 import { isoDay, shiftDay, watMidnight } from '../../server/data-model/calendar.ts'
 import { historicalFixtures } from '../helpers/historical-fixtures.ts'
@@ -273,4 +274,15 @@ test('AC6,7 a failed person audit rolls back while unrelated catch-up units stil
   assert.equal(await db.weeklyTracker.count({ where: { id: failedId } }), 0)
   assert.equal(await db.auditEvent.count({ where: { targetId: failedId } }), 0)
   assert.equal((await db.workWeek.findUniqueOrThrow({ where: { id: week.id } })).rosterCapturedAt, null)
+})
+
+test('synchronous close publishes immutable week, person, task, comment and review snapshots', async () => {
+  const result = await closeHistoryWeek(db, weekId)
+  assert.ok(['CAPTURED', 'ALREADY_CAPTURED'].includes(result.code))
+  const snapshot = await db.historyWeekSnapshot.findUniqueOrThrow({ where: { weekId }, include: { persons: true, tasks: true } })
+  assert.equal(snapshot.persons.length, (await db.weeklyTracker.count({ where: { weekId } })))
+  const trackerIds = (await db.weeklyTracker.findMany({ where: { weekId }, select: { id: true } })).map((row) => row.id)
+  assert.equal(snapshot.tasks.length, await db.weeklyTask.count({ where: { trackerId: { in: trackerIds }, deletedAt: null } }))
+  assert.equal((await closeHistoryWeek(db, weekId)).code, 'ALREADY_CAPTURED')
+  await assert.rejects(db.historyTaskSnapshot.update({ where: { id: snapshot.tasks[0]?.id ?? 'missing' }, data: { title: 'rewrite' } }))
 })

@@ -45,6 +45,7 @@
     "test:employee:lifecycle:browser": "tsc -p tsconfig.tests.json && node --import tsx --test --test-concurrency=1 tests/employee/lifecycle.browser.test.ts",
     "test:employee:app": "node scripts/employee-test-app.mjs",
     "history:capture": "tsx scripts/history-capture.ts",
+    "history:close": "tsx scripts/history-close.ts",
     "test:employee:history": "tsc -p tsconfig.tests.json && node --import tsx --test --test-concurrency=1 tests/employee/history.test.ts",
     "test:employee:history:browser": "tsc -p tsconfig.tests.json && node --import tsx --test --test-concurrency=1 tests/employee/history.browser.test.ts",
     "test:employee:leave": "tsc -p tsconfig.tests.json && node --import tsx --test --test-concurrency=1 tests/employee/leave.test.ts",

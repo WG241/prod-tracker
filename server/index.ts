@@ -15,7 +15,7 @@ import { registerAuth, registerNavigation } from './auth/router.ts'
 import { apiErrorHandler, fatalGuard } from './errors.ts'
 import { privateStorage } from './private-storage.ts'
 import { registerEmployee } from './employee/router.ts'
-import { startHistoryWorker } from './employee/history-worker.ts'
+import { startHistoryCloser } from './employee/history-worker.ts'
 
 fatalGuard()
 
@@ -60,7 +60,7 @@ async function main() {
   }
 
   app.use(apiErrorHandler())
-  const stopHistory = startHistoryWorker(prisma)
+  const stopHistory = startHistoryCloser(prisma)
 
   let stopping = false
   const shutdown = async () => {
