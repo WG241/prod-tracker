@@ -1,6 +1,7 @@
 export const messages = {
   INVALID_INPUT: 'Check your email and password.',
   INVALID_CREDENTIALS: 'Email or password is incorrect.',
+  CREDENTIALS_CHANGED: 'Your credentials changed while signing in. Try again with your current password.',
   ACCOUNT_UNAVAILABLE: 'Your account is not available. Contact HR.',
   SESSION_REQUIRED: 'Please sign in to continue.',
   FORBIDDEN: 'You do not have access to that page.',

@@ -3,6 +3,8 @@ import type { PrismaClient } from '../../src/generated/prisma/client.ts'
 import type { AuthProvider } from './provider.ts'
 import { safeContext, staffContext } from './context.ts'
 import { AuthFailure } from './errors.ts'
+import { credentialAccount } from './credential.ts'
+import { databaseClock } from '../db.ts'
 
 export function providerHeaders(incoming: { cookie?: string; origin?: string; 'user-agent'?: string }) {
   const headers = new Headers()
@@ -93,6 +95,11 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
     return { context: safeContext(staff, session.expiresAt), headers: result.headers, internalSessionId: session.id }
   }
   async function signIn(email: string, password: string, headers: Headers, emailKey?: string) {
+    const [before] = await db.$queryRaw<{ id: string; password: string; userId: string }[]>`
+      SELECT a.id, a.password, a."userId"
+      FROM "AuthUser" u JOIN "AuthAccount" a ON a."userId"=u.id AND a."accountId"=u.id
+      WHERE u.email=${email} AND a."providerId"='credential' AND a.password IS NOT NULL
+    `
     let result
     try { result = await auth.api.signInEmail({ body: { email, password }, headers, returnHeaders: true }) }
     catch (error) {
@@ -101,31 +108,34 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
       if (error instanceof APIError && error.body?.code === 'ACCOUNT_UNAVAILABLE') throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
       throw error
     }
-    // Prefer the documented response token, then Set-Cookie, then newest user session.
-    const tokenCandidates = [
-      typeof result.response.token === 'string' ? result.response.token : null,
-      sessionTokenFromSetCookie(result.headers),
-    ]
-    let session = null
-    for (const token of tokenCandidates) {
-      if (!token) continue
-      session = await db.authSession.findUnique({ where: { token } })
-      if (session) break
-    }
-    if (!session && typeof result.response.user?.id === 'string') {
-      session = await db.authSession.findFirst({
-        where: { userId: result.response.user.id },
-        orderBy: { createdAt: 'desc' },
-      })
-    }
-    if (!session) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
+    // The provider's cookie contains the issued token followed by its signature.
+    const token = result.response.token || sessionTokenFromSetCookie(result.headers)?.split('.')[0]
+    if (!token) throw new AuthFailure('SERVICE_UNAVAILABLE', 503)
+    const session = await db.authSession.findUnique({ where: { token }, select: { id: true, userId: true } })
+    if (!session) throw new AuthFailure('CREDENTIALS_CHANGED', 409)
     try {
-      const staff = await staffContext(db, session.userId)
-      if (!staff) throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
-      const context = safeContext(staff, session.expiresAt)
-      await db.$transaction(async (tx) => {
+      const context = await db.$transaction(async (tx) => {
+        // Same owner lock and order as the password command. Never forward a
+        // session created by a sign-in that crossed a credential change.
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id=${session.userId} FOR UPDATE`
+        await tx.$queryRaw`SELECT id FROM "AuthSession" WHERE id=${session.id} FOR SHARE`
+        await tx.$queryRaw`SELECT id FROM "AuthUser" WHERE id=${session.userId} FOR SHARE`
+        await tx.$queryRaw`SELECT id FROM "EmploymentAssignment" WHERE "userId"=${session.userId} AND "effectiveTo" IS NULL ORDER BY id FOR SHARE`
+        await tx.$queryRaw`SELECT id FROM "AuthAccount" WHERE "userId"=${session.userId} AND "accountId"=${session.userId} AND "providerId"='credential' FOR SHARE`
+        const at = await databaseClock(tx)
+        const issued = await tx.authSession.findFirst({
+          where: { id: session.id, userId: session.userId, token, expiresAt: { gt: at } },
+          select: { expiresAt: true },
+        })
+        const credential = await credentialAccount(tx, session.userId)
+        if (!issued || !before || before.userId !== session.userId || before.id !== credential?.id || before.password !== credential.password) {
+          throw new AuthFailure('CREDENTIALS_CHANGED', 409)
+        }
+        const staff = await staffContext(tx, session.userId, true, at)
+        if (!staff || staff.person.email.trim().toLowerCase() !== email) throw new AuthFailure('ACCOUNT_UNAVAILABLE', 403)
         if (emailKey) await tx.loginThrottle.deleteMany({ where: { key: emailKey } })
         await tx.auditEvent.create({ data: { actorId: session.userId, action: 'auth.signin.completed', targetType: 'AuthSession', targetId: session.id } })
+        return safeContext(staff, issued.expiresAt)
       }, { maxWait: 5000, timeout: 5000 })
       return { context, headers: result.headers }
     } catch (error) {
@@ -151,7 +161,9 @@ export function createAuthService(db: PrismaClient, auth: AuthProvider) {
     if (session) await outcome('auth.signout.completed', session)
     return signedOut.headers
   }
-  return { current, signIn, signOut }
+  const passwordTools = async () => (await auth.$context).password
+  const expirePasswordChangeCookies = async (headers: Headers) => (await auth.api.signOut({ headers, returnHeaders: true })).headers
+  return { current, signIn, signOut, passwordTools, expirePasswordChangeCookies }
 }
 
 export type AuthService = ReturnType<typeof createAuthService>

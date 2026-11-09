@@ -38,6 +38,7 @@ export async function authRequest(path: '/api/session' | '/api/auth/sign-in' | '
     const messages: Record<number, string> = {
       400: 'Check your email and password.', 401: path === '/api/auth/sign-in' ? 'Email or password is incorrect.' : 'Please sign in to continue.',
       403: forbidden ? 'You do not have access to that page.' : 'Your account is not available. Contact HR.', 429: 'Too many attempts. Please wait and try again.',
+      409: 'Your credentials changed while signing in. Try again with your current password.',
     }
     const retry = Number(response.headers.get('retry-after'))
     throw new SessionError(response.status, messages[response.status] ?? 'The service is unavailable. Please try again.', Number.isFinite(retry) ? Math.max(0, retry) : 0)

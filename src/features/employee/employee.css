@@ -123,6 +123,7 @@
 .employee-activity h4 { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 1px; color: var(--color-muted); }
 .employee-activity p { font-size: var(--text-md); line-height: 1.8; margin-top: 9px; color: var(--color-gray-700); white-space: pre-wrap; overflow-wrap: anywhere; }
 .employee-comments-heading { margin: 25px 0 14px; }
+.manager-own-task-notice { margin-top: var(--spacing-4); }
 .employee-comment { background: var(--color-surface-subtle); border-radius: var(--radius-xl); padding: 12px; margin-bottom: 10px; }
 .employee-comment > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: var(--text-sm); }
 .employee-comment small { font-size: var(--text-caption); color: var(--color-muted); }

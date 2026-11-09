@@ -11,6 +11,7 @@ export const taskErrors = {
   WEEK_CHANGED: 'The week changed. Reload the current week before creating a task.',
   SAVE_BEFORE_RESUBMIT: 'Save the task changes first, then mark it completed again.',
   MANAGER_UNAVAILABLE: 'Your line manager is not available for review. Contact HR.',
+  OWN_TASK_REVIEW_CONFLICT: 'This task has unresolved review evidence. Contact HR before changing it.',
   TASK_LOCKED: 'This change is not available while the tracker or task is locked.',
   ON_LEAVE: 'Your tracker is paused while you are on leave.',
 } as const

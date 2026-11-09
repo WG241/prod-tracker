@@ -4,6 +4,8 @@ import { WorkspaceShell } from '../../components/layout/WorkspaceShell.tsx'
 import { workspaces } from './config.ts'
 import type { WorkspaceRole } from './config.ts'
 import { useAnnouncementReset } from '../../components/accessibility/useAnnounce.ts'
+import { ManagerDashboardPreview } from '../../dev/ManagerDashboardPreview.tsx'
+import { ProfilePreview } from '../../dev/ProfilePreview.tsx'
 
 export function Workspace({ role = 'Employee', developmentControls }: { role?: WorkspaceRole; developmentControls?: ReactNode }) {
   const workspace = workspaces[role]
@@ -18,8 +20,11 @@ export function Workspace({ role = 'Employee', developmentControls }: { role?: W
   }, [selected])
   return (
     <WorkspaceShell workspace={workspace} selected={selected} onSelect={setSelected} headingRef={headingRef} developmentControls={developmentControls}>
-      <div className="workspace-page-heading"><p className="eyebrow">Preview workspace</p><h1 ref={headingRef} tabIndex={-1}>{selected}</h1></div>
-      <div className="workspace-unavailable" role="note"><span className="workspace-unavailable-dot" aria-hidden="true" /><span>This page is coming soon.</span></div>
+      {selected === 'Profile' ? <ProfilePreview workspace={workspace} headingRef={headingRef} />
+        : role === 'Line Manager' && selected === 'Dashboard' ? <ManagerDashboardPreview headingRef={headingRef} onApprovals={() => setSelected('Approvals')} /> : <>
+        <div className="workspace-page-heading"><p className="eyebrow">Preview workspace</p><h1 ref={headingRef} tabIndex={-1}>{selected}</h1></div>
+        <div className="workspace-unavailable" role="note"><span className="workspace-unavailable-dot" aria-hidden="true" /><span>This page is coming soon.</span></div>
+      </>}
     </WorkspaceShell>
   )
 }

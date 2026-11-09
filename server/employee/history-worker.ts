@@ -157,20 +157,26 @@ export async function historyPass(db: PrismaClient, cursor: HistoryCursor, apply
 }
 export function startHistoryCloser(db: PrismaClient) {
   let stopped = false, active: Promise<unknown> | null = null, timer: NodeJS.Timeout | null = null
-  const schedule = () => {
+  const schedule = (retry: boolean) => {
     if (stopped) return
-    const delay = Math.max(1000, nextSaturdayClose(new Date()).getTime() - Date.now())
-    timer = setTimeout(run, delay).unref()
+    const untilClose = Math.max(1000, nextSaturdayClose(new Date()).getTime() - Date.now())
+    timer = setTimeout(run, retry ? Math.min(untilClose, 60_000) : untilClose).unref()
   }
   const run = () => {
     if (stopped || active) return
+    let retry = false
     active = initializeHistory(db).then(async (initialized) => {
       if (!['CAPTURED', 'ALREADY_CAPTURED'].includes(initialized.code)) {
+        retry = initialized.code === 'RETRY_LATER'
         logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', initialized.code)
-        return []
+        return
       }
-      return closeDueHistory(db)
-    }).catch((error: unknown) => logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', error)).finally(() => { active = null; schedule() })
+      const results = await closeDueHistory(db)
+      retry = results.some(({ code }) => code === 'RETRY_LATER')
+    }).catch((error: unknown) => {
+      retry = true
+      logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', error)
+    }).finally(() => { active = null; schedule(retry) })
   }
   run()
   return async () => { stopped = true; if (timer) clearTimeout(timer); await active }

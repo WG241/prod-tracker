@@ -6,6 +6,8 @@
 .skip-link:focus { transform: none; }
 h1, h2 { font-weight: var(--font-weight-semibold); }
 .workspace button, .ui-button, .ui-icon-button { -webkit-tap-highlight-color: transparent; }
+.workspace-approval-count { margin-inline-start: auto; border-radius: var(--radius-sm); padding-inline: var(--spacing-2); background: var(--color-nav-count-bg); color: var(--color-nav-count-fg); font-size: var(--text-caption); }
+@media (max-width: 1023px) { .workspace-approval-count { display: none; } }
 .workspace-sidebar { width: var(--workspace-rail); position: fixed; inset: var(--workspace-offset) auto 0 0; background: var(--color-surface); border-right: 1px solid var(--color-line); padding: 27px var(--spacing-4\.5) var(--spacing-4); display: flex; flex-direction: column; z-index: var(--z-sidebar); }
 .workspace-brand { padding: 0 13px 30px; }
 .wordmark { font-size: var(--text-5xl); font-weight: var(--font-weight-bold); letter-spacing: -1.6px; line-height: 1.1; color: var(--color-ink); display: block; white-space: nowrap; }

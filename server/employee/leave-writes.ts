@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { recordLeaveEvent } from '../notifications/events.ts'
+import type { LeaveRecipient } from '../notifications/events.ts'
+import { requestEmailPass } from '../email/worker.ts'
 import type { Prisma, PrismaClient, LeaveRecord } from '../../src/generated/prisma/client.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
 import type { LeaveOperation, LeaveResult, LeaveWarning } from '../../src/features/employee/leave-contracts.ts'
@@ -19,32 +22,39 @@ function replay(value: Prisma.JsonValue, requestId: string, operation: LeaveOper
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some((key) => !['version', 'requestId', 'operation', 'leaveId', 'appliedAt', 'changed', 'replayed', 'notificationWarnings'].includes(key)) || value.version !== 1 || value.requestId !== requestId || value.operation !== operation || value.leaveId !== leaveId || typeof value.appliedAt !== 'string' || !Number.isFinite(Date.parse(value.appliedAt)) || typeof value.changed !== 'boolean' || value.replayed !== false || !Array.isArray(value.notificationWarnings) || value.notificationWarnings.some((v) => v !== 'MANAGER_UNAVAILABLE' && v !== 'HR_UNAVAILABLE')) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
   return { version: 1, requestId, operation, leaveId, appliedAt: value.appliedAt, changed: value.changed, replayed: true, notificationWarnings: value.notificationWarnings as LeaveWarning[] }
 }
-async function lockSourceWeeks(tx: Tx, startsOn: Date, endsOn: Date) {
+export async function lockSourceWeeks(tx: Tx, startsOn: Date, endsOn: Date) {
   // The RETURN contribution is contained in the original interval, as is cancellation.
   await tx.$queryRaw`SELECT id FROM "WorkWeek" WHERE ${startsOn}::date<="startsOn"+4 AND ${endsOn}::date>"startsOn" ORDER BY "startsOn" FOR SHARE`
 }
-async function recipients(tx: Tx, userId: string, managerId: string | null, businessId: string | null, clock: LeaveClock) {
+async function recipients(tx: Tx, userId: string, source: { id: string; managerId: string | null; businessId: string | null }, clock: LeaveClock) {
+  const { managerId, businessId } = source
   const discoveredAt = await clock(tx)
   const candidates = await tx.user.findMany({ where: { OR: [ ...(managerId ? [{ id: managerId }] : []), { accountStatus: 'ACTIVE', assignments: { some: { role: 'HR_ADMIN', effectiveFrom: { lte: discoveredAt }, effectiveTo: null } } } ] }, select: { id: true }, orderBy: { id: 'asc' } })
   for (const row of candidates) {
     if (row.id !== userId) await tx.$queryRaw`SELECT id FROM "User" WHERE id=${row.id} FOR SHARE`
     await tx.$queryRaw`SELECT id FROM "EmploymentAssignment" WHERE "userId"=${row.id} ORDER BY id FOR SHARE`
   }
-  const at = await clock(tx), ids = new Set([userId])
+  const at = await clock(tx), recipients = new Map<string, LeaveRecipient['basis']>([[userId, { version: 1, relationship: 'OWNER', sourceUserId: userId }]])
   let manager = false, hr = false
   for (const candidate of candidates) {
     const row = await tx.user.findUnique({ where: { id: candidate.id }, include: { assignments: { where: { effectiveFrom: { lte: at }, effectiveTo: null }, take: 2 } } })
     if (!row || row.accountStatus !== 'ACTIVE' || row.assignments.length !== 1) continue
     const a = row.assignments[0]
-    if (row.id === managerId && a.role === 'LINE_MANAGER' && a.businessId === businessId) { manager = true; ids.add(row.id) }
-    if (a.role === 'HR_ADMIN') { hr = true; ids.add(row.id) }
+    if (row.id === managerId && a.role === 'LINE_MANAGER' && businessId && a.businessId === businessId) {
+      manager = true
+      if (!recipients.has(row.id)) recipients.set(row.id, { version: 1, relationship: 'MANAGER', sourceUserId: userId, sourceAssignmentId: source.id, recipientAssignmentId: a.id, businessId })
+    }
+    if (a.role === 'HR_ADMIN') {
+      hr = true
+      if (!recipients.has(row.id)) recipients.set(row.id, { version: 1, relationship: 'HR', sourceUserId: userId, recipientAssignmentId: a.id })
+    }
   }
   const warnings: LeaveWarning[] = []
   if (!manager) warnings.push('MANAGER_UNAVAILABLE')
   if (!hr) warnings.push('HR_UNAVAILABLE')
-  return { ids: [...ids].sort(), warnings, resolvedAt: at.toISOString() }
+  return { recipients: [...recipients.keys()].sort().map((id) => ({ id, basis: recipients.get(id)! })), warnings, resolvedAt: at.toISOString() }
 }
-function guardRefusal(error: unknown, depth = 0): boolean {
+export function guardRefusal(error: unknown, depth = 0): boolean {
   if (!error || typeof error !== 'object' || depth > 5) return false
   const value = error as Record<string, unknown>
   return ['message', 'originalMessage'].some((key) => value[key] === 'Historical leave contribution is immutable') || ['meta', 'driverAdapterError', 'cause'].some((key) => guardRefusal(value[key], depth + 1))
@@ -54,7 +64,7 @@ export async function mutateLeave(db: PrismaClient, context: SessionContext, ses
   const digest = createHash('sha256').update(JSON.stringify({ kind: operation.kind, path: request.path, body: request.body })).digest('hex')
   for (let attempt = 0; ; attempt++) {
     try {
-      return await db.$transaction(async (tx) => {
+      const committed = await db.$transaction(async (tx) => {
         const userId = context.user.id
         await lockPrincipal(tx, context, sessionId)
         let at = await clock(tx)
@@ -73,7 +83,7 @@ export async function mutateLeave(db: PrismaClient, context: SessionContext, ses
           const start = row?.startsOn ?? day(operation.kind === 'CREATE' ? operation.draft.startsOn : '')
           const end = row?.expectedReturnOn ?? day(operation.kind === 'CREATE' ? operation.draft.expectedReturnOn : '')
           await lockSourceWeeks(tx, start, end)
-          const targets = await recipients(tx, userId, authority.assignment.managerId, authority.assignment.businessId, clock)
+          const targets = await recipients(tx, userId, authority.assignment, clock)
           at = await clock(tx)
           authority = await principal(tx, context, sessionId, at)
           const projection = await currentLeave(tx, userId, at), today = watCalendarDay(at)
@@ -92,19 +102,18 @@ export async function mutateLeave(db: PrismaClient, context: SessionContext, ses
           if (isoDay(watCalendarDay(after)) !== projection.today) throw new LeaveDayChanged()
           notificationWarnings = targets.warnings
           const event = operation.kind === 'CREATE' ? 'RECORDED' : operation.kind === 'CANCEL' ? 'CANCELLED' : 'RETURNED'
-          const title = operation.kind === 'CREATE' ? 'Leave recorded' : operation.kind === 'CANCEL' ? 'Leave cancelled' : 'Return recorded'
-          const label = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
           const name = authority.person.name?.trim() || 'Staff member'
-          const body = operation.kind === 'RETURN' ? `${name} returned on ${label(row.actualReturnOn!)}.` : `${name}: ${title.toLowerCase()} from ${label(row.startsOn)} until the first day back, ${label(row.expectedReturnOn)}.`
-          for (const recipientId of targets.ids) await tx.notification.create({ data: { recipientId, kind: `LEAVE_${event}`, title, body, leaveId: row.id, deduplicationKey: `leave:${row.id}:${operation.kind === 'CREATE' ? 'recorded' : operation.kind === 'CANCEL' ? 'cancelled' : 'returned'}`, createdAt: at } })
+          for (const recipient of targets.recipients) await recordLeaveEvent(tx, recipient, event, row, name, at)
           await tx.auditEvent.create({ data: { actorId: userId, action: `LEAVE_${event}`, targetType: 'LeaveRecord', targetId: row.id, createdAt: at,
-            before: before ?? undefined, after: { ...safe(row), requestId, recipientIds: targets.ids, resolvedAt: targets.resolvedAt, notificationWarnings } } })
+            before: before ?? undefined, after: { ...safe(row), requestId, recipientIds: targets.recipients.map(({ id }) => id), resolvedAt: targets.resolvedAt, notificationWarnings } } })
         }
         if (!row) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
         const result: LeaveResult = { version: 1, requestId, operation: operation.kind, leaveId: row.id, appliedAt: at.toISOString(), changed, replayed: false, notificationWarnings }
         await tx.leaveMutationReceipt.create({ data: { userId, requestId, operation: operation.kind, requestHash: digest, leaveId: row.id, result: { ...result }, createdAt: at } })
         return result
       }, { isolationLevel: 'ReadCommitted', maxWait: 5000, timeout: 15000 })
+      if (committed.changed && !committed.replayed) requestEmailPass()
+      return committed
     } catch (error) {
       const code = databaseErrorCode(error)
       if (attempt < 2 && (error instanceof LeaveDayChanged || ['P2002', 'P2034', '40P01', '40001'].includes(code ?? ''))) continue

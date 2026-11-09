@@ -44,7 +44,10 @@ export async function readHistory(db: PrismaClient, context: SessionContext, que
     const snapshotWeekStarts = snapshotWeeks.map((row) => row.startsOn)
     const snapshotByDate = new Map(snapshotWeeks.map((row) => [isoDay(row.startsOn), row]))
     const snapshotTasks = snapshotWeekIds.length ? await tx.historyTaskSnapshot.findMany({ where: { historyWeekId: { in: snapshotWeekIds }, ownerId: userId, ...(query.week ? { historyWeek: { startsOn: day(query.week) } } : {}),
-      ...(query.status ? { status: query.status } : {}), ...(query.from && query.to ? { startsOn: { lte: day(query.to) }, endsOn: { gte: day(query.from) } } : {}) }, include: { historyWeek: { select: { startsOn: true } } } }) : []
+      ...(query.from && query.to ? { startsOn: { lte: day(query.to) }, endsOn: { gte: day(query.from) } } : {}) }, include: { historyWeek: { select: { startsOn: true } } } }) : []
+    const canonical = snapshotTasks.length ? await tx.weeklyTask.findMany({ where: { id: { in: snapshotTasks.map(({ id }) => id) },
+      ownerId: userId, tracker: { userId }, deletedAt: null, ...(query.status ? { status: query.status } : {}) }, select: { id: true, status: true } }) : []
+    const liveStatus = new Map(canonical.map(({ id, status }) => [id, status]))
     const snapshotTaskWeeks = new Set(snapshotTasks.map((row) => isoDay(row.historyWeek.startsOn)))
     const taskWindows = await tx.$queryRaw<{ trackerId: string; matches: boolean }[]>`
       SELECT t."trackerId",bool_or(${query.from === null} OR (t."startsOn"<=${query.to ? day(query.to) : at}::date AND t."endsOn">=${query.from ? day(query.from) : at}::date)) AS matches
@@ -74,7 +77,11 @@ export async function readHistory(db: PrismaClient, context: SessionContext, que
     const rows = await tx.weeklyTask.findMany({ where, orderBy: [{ tracker: { week: { startsOn: 'desc' } } }, { startsOn: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, trackerId: true, title: true, status: true, startsOn: true, endsOn: true, createdAt: true, tracker: { select: { week: { select: { startsOn: true } } } } } })
     const records = [
-      ...snapshotTasks.map((row) => ({ id: row.id, title: row.title, status: row.status, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn), week: isoDay(row.historyWeek.startsOn), ownerName: row.ownerName, createdAt: row.createdAt })),
+      ...snapshotTasks.flatMap((row) => {
+        const status = liveStatus.get(row.id)
+        return status ? [{ id: row.id, title: row.title, status, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn),
+          week: isoDay(row.historyWeek.startsOn), ownerName: row.ownerName, createdAt: row.createdAt }] : []
+      }),
       ...rows.map((row) => ({ id: row.id, title: row.title, status: row.status, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn), week: isoDay(row.tracker.week.startsOn), ownerName: available.get(row.trackerId)!.displayName, createdAt: row.createdAt })),
     ].sort((a, b) => b.week.localeCompare(a.week) || a.startsOn.localeCompare(b.startsOn) || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
     const total = records.length, skip = pageOffset(query.page, total)

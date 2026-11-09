@@ -1,6 +1,6 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, RefAttributes } from 'react'
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & RefAttributes<HTMLButtonElement> & {
   variant?: 'default' | 'primary' | 'success' | 'danger' | 'ghost'
   size?: 'normal' | 'small'
   busy?: boolean
@@ -13,7 +13,7 @@ export function Button({ variant = 'default', size = 'normal', type = 'button', 
   }} />
 }
 
-type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'> & {
+type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'> & RefAttributes<HTMLButtonElement> & {
   label: string
 }
 

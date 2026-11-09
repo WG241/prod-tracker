@@ -1,5 +1,6 @@
 import type { Prisma } from '../../src/generated/prisma/client.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
+import type { OwnTaskRole } from '../../src/features/employee/mutations.ts'
 import { EmployeeFailure, weekProjection } from './calendar.ts'
 import { employeePrincipal } from './reads.ts'
 
@@ -13,9 +14,9 @@ export async function lockPrincipal(tx: Tx, context: SessionContext, sessionId: 
   await tx.$queryRaw`SELECT id FROM "LeaveRecord" WHERE "userId"=${id} ORDER BY id FOR SHARE`
   await tx.$queryRaw`SELECT id FROM "TrackerSettings" WHERE id='workforce-group' FOR SHARE`
 }
-export async function principal(tx: Tx, context: SessionContext, sessionId: string, asOf: Date) {
+export async function principal(tx: Tx, context: SessionContext, sessionId: string, asOf: Date, role: OwnTaskRole = 'EMPLOYEE') {
   if (!await tx.authSession.findFirst({ where: { id: sessionId, userId: context.user.id, expiresAt: { gt: asOf } }, select: { id: true } })) throw new EmployeeFailure('SESSION_REQUIRED', 401)
-  return employeePrincipal(tx, context, asOf)
+  return employeePrincipal(tx, context, asOf, role)
 }
 export async function ensureWeek(tx: Tx, start: Date) {
   let week = await tx.workWeek.findUnique({ where: { startsOn: start } })

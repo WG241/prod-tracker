@@ -1,0 +1,67 @@
+.notification-bell { position: relative; }
+.notification-bell[aria-expanded="true"] { background: var(--color-surface-tint); }
+.notification-badge {
+  position: absolute;
+  inset: var(--spacing-1) var(--spacing-1) auto auto;
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-pill);
+  min-width: var(--spacing-4);
+  padding-inline: var(--spacing-0\.5);
+  background: var(--color-red);
+  color: var(--color-surface);
+  font-size: var(--text-xs);
+  line-height: 1.1;
+}
+.workspace-topbar { position: relative; }
+.notification-tray {
+  position: absolute;
+  top: calc(100% - var(--spacing-1));
+  right: var(--spacing-6);
+  z-index: var(--z-avatar-menu);
+  width: 23.125rem;
+  max-width: calc(100vw - var(--spacing-6));
+  box-shadow: var(--shadow-panel);
+}
+.notification-tray-header, .notification-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+}
+.notification-tray-header { border-bottom: 1px solid var(--color-line-soft); }
+.notification-tray-header h2 { font-size: var(--text-lg); }
+.notification-tray-body {
+  padding: var(--spacing-2) var(--spacing-4);
+  max-height: min(25rem, calc(100dvh - 14rem));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.notification-items { list-style: none; margin: 0; padding: 0; }
+.notification-items li { border-bottom: 1px solid var(--color-line); }
+.notification-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  width: 100%;
+  padding: var(--spacing-3) var(--spacing-1);
+  text-align: left;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.notification-row:hover:not([aria-disabled="true"]) { background: var(--color-surface-tint); }
+.notification-row:focus-visible { outline-offset: -2px; }
+.notification-row > svg { width: var(--spacing-4); height: var(--spacing-4); color: var(--color-blue); flex-shrink: 0; margin-top: var(--spacing-1); }
+.notification-title, .notification-message { display: block; }
+.notification-mark-all { color: var(--color-blue); }
+.notification-message, .notification-items time { color: var(--color-gray-600); }
+.notification-items time { display: block; margin-top: var(--spacing-1); }
+.notification-empty { text-align: center; padding: var(--spacing-12) var(--spacing-4); color: var(--color-gray-600); }
+.notification-empty svg { display: block; margin: 0 auto var(--spacing-4); width: var(--spacing-9); height: var(--spacing-9); }
+.notification-empty p { font-weight: var(--font-weight-semibold); color: var(--color-gray-700); margin-bottom: var(--spacing-1); }
+.notification-tray-error { display: grid; justify-items: start; gap: var(--spacing-2); padding: var(--spacing-3) 0; }
+.notification-feedback { display: grid; justify-items: start; gap: var(--spacing-2); padding: var(--spacing-3) var(--spacing-4); border-bottom: 1px solid var(--color-line-soft); font-size: var(--text-sm); }
+.notification-pagination { border-top: 1px solid var(--color-line-soft); font-size: var(--text-sm); }
+@media (max-width: 639px) {
+  .notification-tray { right: var(--spacing-3); }
+}

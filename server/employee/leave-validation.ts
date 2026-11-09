@@ -8,6 +8,9 @@ const messages = {
   LEAVE_CHANGED: 'This leave can no longer be changed in that way. Reload the latest leave.',
   IDEMPOTENCY_CONFLICT: 'This request identity was already used for a different change.',
   HISTORY_PROTECTED: 'This change would affect frozen history. Contact HR for review.',
+  INCOMING_COVER: 'You are already covering another manager during these dates. Arrange replacement cover before booking leave.',
+  RELIEF_UNAVAILABLE: 'The selected relief officer is no longer available for these dates. Reload and choose an officer.',
+  RELIEF_CHANGED: 'The cover arrangement changed. Reload the latest leave before saving.',
 } as const
 export class LeaveFailure extends Error {
   readonly code: keyof typeof messages

@@ -1,0 +1,9 @@
+.review-tabs { width: fit-content; flex-wrap: wrap; margin-bottom: 18px; }
+.review-filters { align-items: end; }
+.review-filters > .ui-field { flex: 0 1 16rem; min-width: 0; }
+.review-unit { display: block; margin-top: 3px; color: var(--color-muted); }
+.review-task { display: grid; gap: 8px; margin-block: 16px; padding: 16px; border: 1px solid var(--color-line); border-radius: var(--radius-xl); }
+.review-task-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.review-task h3, .review-task p { margin: 0; overflow-wrap: anywhere; }
+.review-task small { color: var(--color-muted); }
+.review-employee-note { padding: 10px 12px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }

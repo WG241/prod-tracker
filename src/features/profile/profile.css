@@ -1,0 +1,86 @@
+.profile-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-6);
+}
+
+.profile-side {
+  display: grid;
+  gap: var(--spacing-5);
+}
+
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-identity .ui-avatar {
+  --avatar-size: var(--spacing-12);
+}
+
+.profile-details {
+  display: grid;
+  gap: var(--spacing-4\.5);
+  margin: 0 0 var(--spacing-4\.5);
+}
+
+.profile-details dt {
+  color: var(--color-gray-700);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-1\.5);
+}
+
+.profile-details dd {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
+  color: var(--color-gray-600);
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: var(--spacing-2\.5) var(--spacing-3);
+}
+
+.profile-preference .ui-field {
+  margin: 0;
+}
+
+.profile-preference .ui-checkbox {
+  font-size: var(--text-sm);
+  min-height: var(--spacing-6);
+}
+
+.profile-action {
+  border-color: var(--color-control-border);
+  margin-top: var(--spacing-6);
+}
+
+.profile-action, .profile-password-cancel, .profile-password-submit {
+  min-height: var(--control-height);
+}
+
+.profile-session-heading {
+  font-size: var(--text-lg);
+  margin-bottom: var(--spacing-1\.5);
+}
+
+.profile-password-cancel {
+  border-color: var(--color-control-border);
+}
+
+@media (max-width: 1023px) {
+  .profile-columns { gap: var(--spacing-4\.5); }
+}
+
+@media (max-width: 760px) {
+  .profile-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 639px) {
+  .profile-action, .profile-password-cancel, .profile-password-submit, .profile-preference .ui-checkbox {
+    min-height: var(--control-height-touch);
+  }
+}

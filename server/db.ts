@@ -1,6 +1,14 @@
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import { PrismaClient } from '../src/generated/prisma/client.ts'
+import type { Prisma } from '../src/generated/prisma/client.ts'
+
+export async function databaseClock(tx: Prisma.TransactionClient) {
+  const [{ milliseconds }] = await tx.$queryRaw<{ milliseconds: bigint }[]>`
+    SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS milliseconds
+  `
+  return new Date(Number(milliseconds))
+}
 
 export function databaseErrorCode(error: unknown, depth = 0): string | null {
   if (!error || typeof error !== 'object' || depth > 4) return null

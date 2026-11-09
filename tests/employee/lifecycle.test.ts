@@ -15,6 +15,7 @@ import { createAuthService } from '../../server/auth/service.ts'
 import { provision } from '../../server/auth/provision.ts'
 import { registerEmployee } from '../../server/employee/router.ts'
 import { mutateTask } from '../../server/employee/writes.ts'
+import { ensureWeek } from '../../server/employee/write-context.ts'
 import { parseOperation, validateTaskDates } from '../../server/employee/task-validation.ts'
 import { monday } from '../../server/employee/calendar.ts'
 import { isoDay, shiftDay } from '../../server/data-model/calendar.ts'
@@ -35,8 +36,8 @@ before(async () => {
   await historicalFixtures(async (tx) => {
     await tx.user.create({ data: { id, name: 'Lifecycle Employee', email: `${id}@example.invalid`, accountStatus: 'ACTIVE' } })
     await tx.employmentAssignment.create({ data: { userId: id, role: 'EMPLOYEE', businessId: source.businessId, unitId: source.unitId, managerId: source.managerId, effectiveFrom: new Date('2020-01-01') } })
-    const existing = await tx.workWeek.findUnique({ where: { startsOn: start } })
-    if (existing) await tx.planningUnlock.create({ data: { weekId: existing.id, scope: 'PERSON', userId: id, grantedById: 'person-kemi-adebayo', reason: 'Isolated lifecycle verification', expiresAt: existing.freezesAt } })
+    const workWeek = await ensureWeek(tx, start)
+    await tx.planningUnlock.create({ data: { weekId: workWeek.id, scope: 'PERSON', userId: id, grantedById: 'person-kemi-adebayo', reason: 'Isolated lifecycle verification', expiresAt: workWeek.freezesAt } })
   })
   assert.ok(process.env.LOCAL_AUTH_TEST_PASSWORD)
   await provision(db, config, id, process.env.LOCAL_AUTH_TEST_PASSWORD)
@@ -91,7 +92,11 @@ test('AC4,5 completion, immutable withdrawal and explicit resubmission', async (
   await command(op, key)
   assert.equal((await row(task.taskId)).status, 'AWAITING_APPROVAL')
   const request = await db.approvalRequest.findUniqueOrThrow({ where: { id: complete.approvalRequestId! } })
-  assert.equal(await db.notification.count({ where: { deduplicationKey: `approval-requested:${request.id}` } }), 1)
+  const alerts = await db.notification.findMany({ where: { deduplicationKey: `approval-requested:${request.id}` } })
+  assert.equal(alerts.length, 1)
+  assert.equal(alerts[0].approvalRequestId, request.id)
+  assert.equal(alerts[0].weeklyTaskId, request.weeklyTaskId)
+  assert.equal(alerts[0].recipientId, request.assignedManagerId)
   assert.equal((await command({ ...op, revision: 1 })).changed, false)
   await assert.rejects(command({ kind: 'EDIT', taskId: task.taskId, revision: 1, draft: draft({ activity: 'Revised', status: 'COMPLETED' }) }), rejection('SAVE_BEFORE_RESUBMIT'))
   await command({ kind: 'EDIT', taskId: task.taskId, revision: 1, draft: draft({ activity: 'Revised', status: 'PENDING' }) })

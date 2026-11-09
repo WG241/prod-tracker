@@ -25,6 +25,8 @@ async function fingerprint() {
     prisma.auditEvent.findMany({ orderBy: { id: 'asc' } }),
     prisma.notification.findMany({ orderBy: { id: 'asc' } }),
     prisma.emailDelivery.findMany({ orderBy: { id: 'asc' } }),
+    prisma.notificationPreference.findMany({ orderBy: { userId: 'asc' } }),
+    prisma.sharedMutationReceipt.findMany({ orderBy: [{ userId: 'asc' }, { requestId: 'asc' }] }),
     prisma.historyWeekSnapshot.findMany({ orderBy: { id: 'asc' } }),
     prisma.historyPersonSnapshot.findMany({ orderBy: { id: 'asc' } }),
     prisma.historyTaskSnapshot.findMany({ orderBy: { id: 'asc' } }),
@@ -75,17 +77,20 @@ async function rejects(label: string, sql: string, values: unknown[], code: stri
 try {
   await client.connect()
   const tables = await client.query<{ tablename: string }>("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations'")
-  assert.deepEqual(tables.rows.map((row) => row.tablename).sort(), [
+  const modelTables = [
     'User','Business','Unit','EmploymentAssignment','WorkWeek','WeeklyTracker','TaskSeries','WeeklyTask','TaskComment',
     'ApprovalRequest','ApprovalDecision','LeaveRecord','ReliefAssignment','TrackerSettings','PlanningUnlock','AuditEvent','Notification','EmailDelivery',
-    'AuthUser','AuthAccount','AuthSession','AuthVerification','LoginThrottle',
+    'AuthUser','AuthAccount','AuthSession','AuthVerification','LoginThrottle','NotificationPreference','SharedMutationReceipt','TaskMutationReceipt','LeaveMutationReceipt',
     'HistoryWeekSnapshot','HistoryPersonSnapshot','HistoryTaskSnapshot','HistoryCommentSnapshot','HistoryReviewSnapshot',
-  ].sort())
+  ]
+  assert.deepEqual(tables.rows.map((row) => row.tablename).sort(), modelTables.sort())
   const triggers = await client.query<{ tgname: string }>('SELECT tgname FROM pg_trigger WHERE NOT tgisinternal')
-  for (const name of ['audit_append_only','decision_append_only','submission_evidence_guard','frozen_roster_guard','history_closed_task_guard','history_week_snapshot_immutable']) {
+  const evidenceGuards = ['audit_append_only','decision_append_only','submission_evidence_guard','frozen_roster_guard',
+    'history_closed_task_guard','history_week_snapshot_immutable','manager_leave_snapshot_guard','relief_evidence_guard']
+  for (const name of evidenceGuards) {
     assert.ok(triggers.rows.some((row) => row.tgname === name), `Missing live history guard: ${name}`)
   }
-  console.info('PASS live PostgreSQL schema: 28 model tables and six history guards')
+  console.info(`PASS live PostgreSQL schema: ${modelTables.length} model tables and ${evidenceGuards.length} history guards`)
   const staff = await prisma.user.count({ where: { assignments: { some: {} } } })
   assert.equal(staff, 28)
   assert.equal(await prisma.weeklyTask.count(), 35)
@@ -173,6 +178,9 @@ try {
   const openTracker = nextRoster.find((row) => row.userId === 'person-ada-okafor')!
   await client.query('BEGIN')
   try {
+    await rejects('self relief', 'INSERT INTO "ReliefAssignment" (id,"leaveId","coveredManagerId","reliefManagerId","startsOn","endsOn") SELECT $1,"leaveId","coveredManagerId","coveredManagerId","startsOn","endsOn" FROM "ReliefAssignment" WHERE id=$2', ['verification-self-relief', 'relief-nneka'], '23514', 'relief_not_self')
+    await rejects('relief dates are immutable', 'UPDATE "ReliefAssignment" SET "endsOn"="endsOn"+1 WHERE id=$1', ['relief-nneka'], '23514')
+    await rejects('relief evidence cannot be deleted', 'DELETE FROM "ReliefAssignment" WHERE id=$1', ['relief-nneka'], '23514')
     await rejects('uppercase account email', 'INSERT INTO "User" (id,email,"updatedAt") VALUES ($1,$2,now())', ['verification-email','UPPER@example.invalid'], '23514', 'user_canonical_email')
     await rejects('active account without a name', 'INSERT INTO "User" (id,email,"accountStatus","updatedAt") VALUES ($1,$2,\'ACTIVE\',now())', ['verification-name','name@example.invalid'], '23514', 'active_user_name')
     await rejects('duplicate current assignment', `INSERT INTO "EmploymentAssignment" (id,"userId",role,"businessId","unitId","managerId","effectiveFrom") SELECT $1,"userId",role,"businessId","unitId","managerId","effectiveFrom" FROM "EmploymentAssignment" WHERE id=$2`, ['verification-assignment','assignment-ada-okafor-current'], '23505', 'one_current_assignment')
@@ -190,7 +198,6 @@ try {
     await rejects('mismatched tracker assignment owner', 'UPDATE "WeeklyTracker" SET "assignmentId"=$1 WHERE id=$2', ['assignment-chidi-eze-current',openTracker.id], '23503')
     await rejects('mismatched task owner', 'UPDATE "WeeklyTask" SET "ownerId"=$1 WHERE id=$2', ['person-chidi-eze',editable.id], '23503')
     await rejects('invalid schedule time', 'UPDATE "TrackerSettings" SET "lockTime"=\'24:00\' WHERE id=\'workforce-group\'', [], '23514', 'settings_times')
-    await rejects('self relief', 'UPDATE "ReliefAssignment" SET "reliefManagerId"="coveredManagerId" WHERE id=$1', ['relief-nneka'], '23514', 'relief_not_self')
     await rejects('sent email without sent time', 'UPDATE "EmailDelivery" SET state=\'SENT\' WHERE id=$1', ['email-notification-ada-approved'], '23514', 'sent_delivery_timestamp')
     await rejects('delete referenced identity', 'DELETE FROM "User" WHERE id=$1', ['person-ada-okafor'], '23001')
     await rejects('delete frozen missing submitter', 'DELETE FROM "WeeklyTracker" WHERE id=$1', [snapshot('Grace Ekanem').id], '23514')
