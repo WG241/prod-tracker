@@ -1,4 +1,9 @@
 export type WorkingStatus = 'PENDING' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED'
+export type OwnTaskRole = 'EMPLOYEE' | 'LINE_MANAGER'
+export const ownTaskRoutes = {
+  EMPLOYEE: { list: '/api/employee/home', tasks: '/api/employee/tasks' },
+  LINE_MANAGER: { list: '/api/line-manager/my-tasks', tasks: '/api/line-manager/my-tasks' },
+} as const
 export type TaskDraft = { title: string; activity: string; startsOn: string; endsOn: string; carryRequested: boolean; status?: WorkingStatus; blockerReason?: string }
 export type TaskOperation =
   | { kind: 'CREATE'; week: string; draft: TaskDraft }
@@ -34,16 +39,16 @@ export type TaskPermissions = {
 export function operationKey(operation: TaskOperation) {
   return operation.kind === 'CREATE' ? 'CREATE' : `${operation.kind}:${operation.taskId}`
 }
-export function operationRequest(operation: TaskOperation) {
-  const root = '/api/employee/tasks'
+export function operationRequest(operation: TaskOperation, role: OwnTaskRole = 'EMPLOYEE') {
+  const root = ownTaskRoutes[role].tasks
   if (operation.kind === 'CREATE') return { path: root, method: 'POST', body: { week: operation.week, ...operation.draft }, revision: undefined }
   const path = `${root}/${encodeURIComponent(operation.taskId)}`
   if (operation.kind === 'COMMENT') return { path: `${path}/comments`, method: 'POST', body: { body: operation.body }, revision: undefined }
   const revision = operation.revision
   switch (operation.kind) {
-    case 'EDIT': return { path, method: 'PATCH', body: operation.draft, revision }
+    case 'EDIT': return role === 'LINE_MANAGER' ? { path: `${path}/edit`, method: 'POST', body: operation.draft, revision } : { path, method: 'PATCH', body: operation.draft, revision }
     case 'STATUS': return { path: `${path}/status`, method: 'POST', body: { status: operation.status, ...(operation.blockerReason === undefined ? {} : { blockerReason: operation.blockerReason }) }, revision }
     case 'CARRY': return { path: `${path}/carry`, method: 'POST', body: { carryRequested: operation.carryRequested }, revision }
-    case 'DELETE': return { path, method: 'DELETE', body: {}, revision }
+    case 'DELETE': return role === 'LINE_MANAGER' ? { path: `${path}/delete`, method: 'POST', body: {}, revision } : { path, method: 'DELETE', body: {}, revision }
   }
 }

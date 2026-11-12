@@ -63,6 +63,9 @@ export async function provision(db: PrismaClient, config: AuthConfig, id: string
       throw new Error('Activation failed, pending identity remains unusable')
     }
     await tx.$executeRaw`UPDATE "AuthUser" SET "provisionedAt"=clock_timestamp() WHERE id=${id}`
+    await tx.notificationPreference.createMany({
+      data: [{ userId: id, emailRemindersEnabled: person.emailRemindersEnabled }], skipDuplicates: true,
+    })
     await tx.auditEvent.create({ data: { actorId: null, action: 'auth.credential.provisioned', targetType: 'AuthUser', targetId: id, after: { source: 'trusted-operator-command' } } })
   }, { maxWait: 5000, timeout: 5000 })
   return 'provisioned'

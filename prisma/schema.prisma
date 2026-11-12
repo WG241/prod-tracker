@@ -44,7 +44,32 @@ model User {
   auditEvents        AuditEvent[]
   notifications      Notification[]
   authIdentity       AuthUser?
+  notificationPreference NotificationPreference?
+  sharedMutationReceipts SharedMutationReceipt[]
   taskMutationReceipts TaskMutationReceipt[]
+}
+
+model NotificationPreference {
+  userId String @id
+  emailRemindersEnabled Boolean @default(true)
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model SharedMutationReceipt {
+  userId String
+  requestId String @db.Uuid
+  operation String
+  requestHash String? @db.Char(64)
+  result Json
+  targetNotificationId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  notification Notification? @relation(fields: [targetNotificationId, userId], references: [id, recipientId], onDelete: Restrict)
+  @@id([userId, requestId])
+  @@index([targetNotificationId, userId])
 }
 
 model AuthUser {
@@ -175,6 +200,9 @@ enum EmailState {
   SENT
   FAILED
   SUPPRESSED
+  SENDING
+  PREVIEWED
+  UNCERTAIN
 }
 
 model Business {
@@ -248,6 +276,7 @@ model WorkWeek {
   trackers WeeklyTracker[]
   unlocks  PlanningUnlock[]
   historySnapshot HistoryWeekSnapshot?
+  notifications Notification[]
 
   @@index([lockedById])
 }
@@ -454,8 +483,10 @@ model ApprovalRequest {
   assignment EmploymentAssignment @relation(fields: [submissionAssignmentId, submittedById], references: [id, userId], onDelete: Restrict)
   reviewer   User?                @relation("RequestReviewer", fields: [assignedManagerId], references: [id], onDelete: Restrict)
   decision   ApprovalDecision?
+  notifications Notification[]
 
   @@unique([weeklyTaskId, attemptNumber])
+  @@unique([id, weeklyTaskId])
   @@index([assignedManagerId, state, submittedAt])
   @@index([weeklyTaskId, submittedById])
   @@index([submittedById])
@@ -493,6 +524,7 @@ model LeaveRecord {
   cancelledAt      DateTime? @db.Timestamptz(3)
   cancelledById    String?
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  contextSnapshot  Json?
 
   user          User               @relation("LeaveOwner", fields: [userId], references: [id], onDelete: Restrict)
   cancelledBy   User?              @relation("LeaveCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
@@ -502,6 +534,7 @@ model LeaveRecord {
 
   @@unique([id, userId])
   @@index([userId, startsOn, expectedReturnOn])
+  @@index([userId, startsOn(sort: Desc), id(sort: Desc)], map: "LeaveRecord_userId_startsOn_id_idx")
   @@index([cancelledById])
 }
 
@@ -530,6 +563,7 @@ model ReliefAssignment {
   endedAt          DateTime? @db.Timestamptz(3)
   endedById        String?
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  contextSnapshot  Json?
 
   leave         LeaveRecord        @relation(fields: [leaveId, coveredManagerId], references: [id, userId], onDelete: Restrict)
   manager       User               @relation("CoveredManager", fields: [coveredManagerId], references: [id], onDelete: Restrict)
@@ -541,6 +575,7 @@ model ReliefAssignment {
   @@index([coveredManagerId, startsOn, endsOn])
   @@index([reliefManagerId, startsOn, endsOn])
   @@index([leaveId, coveredManagerId])
+  @@index([leaveId, startsOn(sort: Desc), id(sort: Desc)], map: "ReliefAssignment_leaveId_startsOn_id_idx")
   @@index([endedById])
 }
 
@@ -619,8 +654,10 @@ model Notification {
   title              String
   body               String
   weeklyTaskId       String?
+  approvalRequestId  String?
   leaveId            String?
   reliefAssignmentId String?
+  workWeekId         String?
   deduplicationKey   String
   readAt             DateTime? @db.Timestamptz(3)
   createdAt          DateTime  @default(now()) @db.Timestamptz(3)
@@ -629,13 +666,19 @@ model Notification {
   task      WeeklyTask?       @relation(fields: [weeklyTaskId], references: [id], onDelete: Restrict)
   leave     LeaveRecord?      @relation(fields: [leaveId], references: [id], onDelete: Restrict)
   relief    ReliefAssignment? @relation(fields: [reliefAssignmentId], references: [id], onDelete: Restrict)
+  workWeek  WorkWeek?         @relation(fields: [workWeekId], references: [id], onDelete: Restrict)
   email     EmailDelivery?
+  approvalRequest ApprovalRequest? @relation(fields: [approvalRequestId, weeklyTaskId], references: [id, weeklyTaskId], onDelete: Restrict)
+  receipts SharedMutationReceipt[]
 
   @@unique([recipientId, deduplicationKey])
+  @@unique([id, recipientId])
+  @@index([approvalRequestId, weeklyTaskId])
   @@index([recipientId, readAt, createdAt])
   @@index([weeklyTaskId])
   @@index([leaveId])
   @@index([reliefAssignmentId])
+  @@index([workWeekId])
 }
 
 model EmailDelivery {
@@ -648,8 +691,22 @@ model EmailDelivery {
   lastAttemptAt  DateTime?  @db.Timestamptz(3)
   sentAt         DateTime?  @db.Timestamptz(3)
   failureCode    String?
+  enqueuedAt DateTime? @db.Timestamptz(3)
+  recipientBasis Json?
+  messageSnapshot Json?
+  transportMode String?
+  provider String?
+  transportRevision String?
+  providerKey String?
+  payloadHash String? @db.Char(64)
+  firstAttemptAt DateTime? @db.Timestamptz(3)
+  firstUncertainAt DateTime? @db.Timestamptz(3)
+  leaseToken String? @db.Uuid
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  providerMessageId String?
 
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
 
   @@index([state, scheduledAt])
+  @@index([state, leaseExpiresAt])
 }

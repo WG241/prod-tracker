@@ -6,7 +6,9 @@ import { AuthFailure } from './errors.ts'
 /** Completed invalid-password attempts that block further sign-in for the email window. */
 export const EMAIL_FAILURE_LIMIT = 5
 
-export function throttleKey(secret: string, namespace: 'email' | 'ip' | 'auth-ip' | 'task-write-user' | 'task-write-ip' | 'leave-write-user' | 'leave-write-ip', value: string) {
+export function throttleKey(secret: string, namespace: 'email' | 'ip' | 'auth-ip' | 'task-write-user' | 'task-write-ip' | 'leave-write-user' | 'leave-write-ip'
+  | 'account-preference-user' | 'account-preference-ip' | 'account-password-user' | 'account-password-ip'
+  | 'notification-write-user' | 'notification-write-ip' | 'manager-write-user' | 'manager-write-ip', value: string) {
   return `${namespace}:${createHmac('sha256', secret).update(value).digest('hex')}`
 }
 

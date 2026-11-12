@@ -17,11 +17,14 @@ import type { TaskOperations } from './operations.ts'
 import { useEffect } from 'react'
 import { useFormValidation } from '../../components/accessibility/useFormValidation.ts'
 import { pendingTextProps } from './pending-fields.ts'
+import type { OwnTaskRole } from './mutations.ts'
+import { ownTaskRoutes } from './mutations.ts'
+import { Eye } from 'lucide-react'
 
-export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, operations, onAction }: { taskId: string; onClose: () => void; onSessionInvalid: () => void; inspection: boolean; operations: TaskOperations; onAction: (task: TaskEntry, action: TaskAction) => void }) {
+export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, operations, onAction, role = 'EMPLOYEE' }: { taskId: string; onClose: () => void; onSessionInvalid: () => void; inspection: boolean; operations: TaskOperations; onAction: (task: TaskEntry, action: TaskAction) => void; role?: OwnTaskRole }) {
   const [page, setPage] = useState(1)
   const recordRef = useRef<HTMLDivElement>(null)
-  const read = useEmployeeRead<DetailResponse>(`/api/employee/tasks/${encodeURIComponent(taskId)}?commentPage=${page}`, onSessionInvalid)
+  const read = useEmployeeRead<DetailResponse>(`${ownTaskRoutes[role].tasks}/${encodeURIComponent(taskId)}?commentPage=${page}`, onSessionInvalid)
   const data = read.data
   const store = useTaskOperations(operations), seenCommit = useRef(store.commits)
   useEffect(() => { if (seenCommit.current !== store.commits) { seenCommit.current = store.commits; read.retry() } }, [store.commits, read])
@@ -37,14 +40,15 @@ export function TaskDrawer({ taskId, onClose, onSessionInvalid, inspection, oper
         <div className="employee-panel-status"><Badge status={taskStatuses[data.task.status]} />{(approved || editableContext) && <SelectField label="Update status" className="ui-select-compact employee-status-select" value={data.task.status} disabled={!data.task.permissions.canChangeStatus || read.stale} title={data.task.permissions.reason ?? undefined} onChange={(event) => onAction(data.task, event.target.value as TaskAction)}>{!['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(data.task.status) && <option value={data.task.status}>{taskStatuses[data.task.status]}</option>}<option value="PENDING">Pending</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="COMPLETED">Completed</option></SelectField>}</div>
         <h3 className="employee-detail-title">{data.task.title}</h3>
         {(data.task.status === 'BLOCKED' || data.task.status === 'DECLINED') && <p className="employee-banner employee-amber">{data.task.status === 'DECLINED' ? 'Declined: ' : 'Blocked: '}{data.task.reason ?? '—'}</p>}
-        {data.task.status === 'AWAITING_APPROVAL' && <p className="employee-banner employee-amber">Awaiting manager approval. Your completion is waiting for sign-off.</p>}
+        {data.task.status === 'AWAITING_APPROVAL' && <p className="employee-banner employee-amber">{role === 'LINE_MANAGER' ? 'This task has unresolved review evidence. Contact HR before changing it.' : 'Awaiting manager approval. Your completion is waiting for sign-off.'}</p>}
         <dl className="employee-detail-meta"><div><dt>Owner</dt><dd>{data.owner.name}</dd></div><div><dt>Dates</dt><dd>{displayDate(data.task.startsOn, false)} – {displayDate(data.task.endsOn)}</dd></div>
           {data.frozen && <><div><dt>Manager at the time</dt><dd>{data.owner.manager ?? '—'}</dd></div><div><dt>Business / Unit</dt><dd>{data.owner.business ?? '—'} / {data.owner.unit ?? '—'}</dd></div></>}
           {data.review?.decision && <div><dt>{data.review.decision.kind === 'APPROVE' ? 'Approver' : 'Reviewer'}</dt><dd>{data.review.decision.reviewer} · {displayTime(data.review.decision.decidedAt)}{data.review.decision.method === 'AUTOMATIC' && ' · Auto-approved'}{data.review.decision.coveredManager && `, for ${data.review.decision.coveredManager}`}</dd></div>}
         </dl>
         {data.review?.decision?.reason && <p className="employee-banner employee-amber">{data.review.decision.reason}</p>}
         <section className="employee-activity"><h4>Activity</h4><p>{data.task.activity}</p></section>
-        <h3 className="employee-comments-heading">Manager comments</h3>
+        {role === 'LINE_MANAGER' && <p className="employee-banner employee-teal manager-own-task-notice"><Eye aria-hidden="true" />Leadership can view this task. It is auto-approved when completed; no manager review is needed.</p>}
+        <h3 className="employee-comments-heading">{role === 'LINE_MANAGER' ? 'Comments' : 'Manager comments'}</h3>
         {data.comments.items.length ? data.comments.items.map((comment) => <article className="employee-comment" key={comment.id}><div><b>{comment.author}</b><small>{displayTime(comment.createdAt)}</small></div><p>{comment.body}</p></article>) : <p className="employee-muted">No comments yet.</p>}
         <Pagination value={data.comments} label="comments" onPage={setPage} />
         {editableContext && <Reply task={data.task} operations={operations} disabled={read.stale || !data.task.permissions.canComment} onSessionInvalid={onSessionInvalid} />}

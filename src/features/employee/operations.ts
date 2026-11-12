@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import type { MutationResult, TaskOperation } from './mutations.ts'
+import type { MutationResult, OwnTaskRole, TaskOperation } from './mutations.ts'
 import { operationKey, operationRequest } from './mutations.ts'
 
 export type OperationRecord = { id: string; operation: TaskOperation; state: 'pending' | 'uncertain' | 'rejected' | 'committed'; error: string; code: string; fields?: Record<string, string>; result?: MutationResult }
 // Owned by AuthApp, so closing a dialog or withholding a workspace never loses a request identity.
 export class TaskOperations {
   private actor = ''
+  private role: OwnTaskRole = 'EMPLOYEE'
   private generation = 0
   private version = 0
   private listeners = new Set<() => void>()
@@ -20,7 +21,9 @@ export class TaskOperations {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   snapshot = () => this.version
   private emit() { this.version++; this.listeners.forEach((listener) => listener()) }
-  bind(actor: string) { if (this.actor !== actor) { this.clear(); this.actor = actor } }
+  bind(actor: string, role: OwnTaskRole = 'EMPLOYEE') {
+    if (this.actor !== actor || this.role !== role) { this.clear(); this.actor = actor; this.role = role }
+  }
   clear() { this.generation++; this.actor = ''; this.records.clear(); this.controllers.forEach((c) => c.abort()); this.controllers.clear(); this.drafts.clear(); this.notice = ''; this.emit() }
   get(key: string) { return this.records.get(key) }
   getDraft<T>(key: string) { return this.drafts.get(key) as T | undefined }
@@ -31,7 +34,7 @@ export class TaskOperations {
   async send(operation: TaskOperation, invalid: () => void) {
     const key = operationKey(operation)
     let record = this.records.get(key)
-    if (record?.state === 'pending') return
+    if (!this.actor || record?.state === 'pending') return
     if (record?.state !== 'uncertain') {
       record = { id: crypto.randomUUID(), operation: structuredClone(operation), state: 'pending', error: '', code: '' }
       this.records.set(key, record)
@@ -40,7 +43,8 @@ export class TaskOperations {
     const generation = this.generation, controller = new AbortController()
     this.controllers.add(controller)
     const timeout = window.setTimeout(() => controller.abort(), 20000)
-    const request = operationRequest(record.operation)
+    const role = this.role
+    const request = operationRequest(record.operation, role)
     try {
       const response = await fetch(request.path, { method: request.method, credentials: 'same-origin', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': record.id, ...(request.revision === undefined ? {} : { 'If-Match': `"${request.revision}"` }) }, body: JSON.stringify(request.body) })
@@ -56,7 +60,7 @@ export class TaskOperations {
       } else if (data.version !== 1 || data.requestId !== record.id || typeof data.taskId !== 'string') throw new Error('Invalid receipt')
       else {
         record.state = 'committed'; record.result = data
-        this.commits++; this.notice = 'Change saved.'
+        this.commits++; this.notice = role === 'LINE_MANAGER' && data.approvalRequestId ? 'Task completed and automatically approved.' : 'Change saved.'
       }
     } catch {
       if (generation !== this.generation) return

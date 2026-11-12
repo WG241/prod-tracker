@@ -6,6 +6,7 @@
   "include": [
     "tests/**/*.ts",
     "scripts/auth-*.ts",
+    "scripts/email-operator.ts",
     "scripts/repair-migration-checksums.ts",
     "scripts/history-capture.ts"
   ]

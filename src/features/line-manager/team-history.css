@@ -1,0 +1,10 @@
+.team-history-filters { align-items: end; }
+.team-history-filters > .ui-field { flex: 0 1 13rem; min-width: 0; }
+.team-history-search { position: relative; flex: 0 1 22.5rem; min-width: 0; }
+.team-history-search input { padding-inline-start: 36px; }
+.team-history-search > svg { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--color-muted); pointer-events: none; }
+.team-history-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--color-muted); }
+.team-history-breadcrumb + .employee-heading { margin-top: 8px; }
+.team-history-breadcrumb ~ .employee-week-card .employee-task-content strong,
+.team-history-task-activity { display: block; overflow-wrap: anywhere; }
+.team-history-task-activity { color: var(--color-muted); }

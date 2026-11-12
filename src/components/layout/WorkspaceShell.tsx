@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { Bell, ChevronDown, LayoutGrid, LogOut, UserRound } from 'lucide-react'
 import type { WorkspaceConfig } from '../../features/workspace/config.ts'
+import { NotificationTray } from '../../features/notifications/NotificationTray.tsx'
+import type { NotificationTarget } from '../../features/notifications/contracts.ts'
+import type { NotificationOperations } from '../../features/notifications/read-operations.ts'
 import { Avatar } from '../ui/Avatar.tsx'
 import { Button, IconButton } from '../ui/Button.tsx'
 import { Dialog } from '../ui/Dialog.tsx'
 
-export function WorkspaceShell({ workspace, selected, onSelect, headingRef, developmentControls, navigation, onNavigate, onSignOut, signingOut, signOutRetrySeconds = 0, children }: {
+export function WorkspaceShell({ workspace, selected, onSelect, headingRef, developmentControls, navigation, onNavigate, onSignOut, signingOut, signOutRetrySeconds = 0, notificationControls, approvalCount = 0, children }: {
   workspace: WorkspaceConfig
   selected: string
   onSelect: (destination: string) => void
@@ -17,9 +20,17 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
   onSignOut?: () => void
   signingOut?: boolean
   signOutRetrySeconds?: number
+  approvalCount?: number
+  notificationControls?: { onSessionInvalid: () => void; operations: NotificationOperations; onTarget: (target: Exclude<NotificationTarget, { kind: 'UNAVAILABLE' }>) => void }
   children: ReactNode
 }) {
   const [accountOpen, setAccountOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  useEffect(() => {
+    const closeTray = () => setNotificationsOpen(false)
+    window.addEventListener('popstate', closeTray)
+    return () => window.removeEventListener('popstate', closeTray)
+  }, [])
   const [moreOpen, setMoreOpen] = useState(false)
   const [displayDate] = useState(() => new Date())
   const accountRef = useRef<HTMLDivElement>(null)
@@ -32,8 +43,13 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
   const moreActive = destinations.slice(4).some((item) => item.label === selected)
   const destination = (label: string, content: ReactNode) => {
     const path = navigation?.find((item) => item.label === label)?.path
+    const approvals = label === 'Approvals' && approvalCount > 0
     return path
-      ? <a key={label} href={path} title={label} aria-label={label} data-workspace-destination={label} aria-current={selected === label ? 'page' : undefined}>{content}</a>
+      ? <a key={label} href={path} title={label} aria-label={approvals ? undefined : label}
+        aria-description={approvals ? `${approvalCount} ${approvalCount === 1 ? 'employee' : 'employees'} awaiting review` : undefined}
+        data-workspace-destination={label} aria-current={selected === label ? 'page' : undefined}>
+        {content}{approvals && <> <span className="workspace-approval-count">{approvalCount}</span></>}
+      </a>
       : <button key={label} type="button" title={label} aria-label={label} data-workspace-destination={label} aria-current={selected === label ? 'page' : undefined} onClick={() => navigate(label)}>{content}</button>
   }
 
@@ -65,6 +81,7 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
 
   const navigate = (destination: string) => {
     setAccountOpen(false)
+    setNotificationsOpen(false)
     returnFocus.current = headingRef.current
     setMoreOpen(false)
     onSelect(destinations.some((item) => item.label === destination) || destination === 'Profile' ? destination : destinations[0].label)
@@ -79,7 +96,7 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
       if (!link || link.target || link.hasAttribute('download')) return
       const url = new URL(link.href)
       if (url.origin !== window.location.origin || url.search || url.hash || !navigation?.some((item) => item.path === url.pathname) && url.pathname !== '/profile') return
-      event.preventDefault(); setAccountOpen(false); setMoreOpen(false); onNavigate(url.pathname)
+      event.preventDefault(); setAccountOpen(false); setNotificationsOpen(false); setMoreOpen(false); onNavigate(url.pathname)
     }}>
       <a className="skip-link" href="#workspace-main">Skip to main content</a>
       {developmentControls}
@@ -96,10 +113,15 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
           <div className="workspace-crumb"><span>Workspace</span><span aria-hidden="true">/</span><strong>{selected}</strong></div>
           <div className="workspace-top-actions">
             {navigation ? <time dateTime={new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(displayDate)}>{new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(displayDate)}</time> : <time dateTime="2026-10-19"><span className="sr-only">Sample date: </span>Mon, 19 Oct 2026</time>}
-            <span className="sr-only" id="notifications-unavailable">Notifications are not built yet.</span>
-            <IconButton label="Notifications" disabled aria-describedby="notifications-unavailable"><Bell aria-hidden="true" /></IconButton>
+            {notificationControls ? <NotificationTray open={notificationsOpen} {...notificationControls} onOpenChange={(open) => {
+              if (open) setAccountOpen(false)
+              setNotificationsOpen(open)
+            }} /> : <>
+              <span className="sr-only" id="notifications-unavailable">Notifications are unavailable.</span>
+              <IconButton label="Notifications" disabled aria-describedby="notifications-unavailable"><Bell aria-hidden="true" /></IconButton>
+            </>}
             <div className="workspace-account" ref={accountRef}>
-              <button ref={accountButton} type="button" className="workspace-profile" aria-expanded={accountOpen} aria-controls={accountId} onClick={() => setAccountOpen(!accountOpen)}>
+              <button ref={accountButton} type="button" className="workspace-profile" aria-expanded={accountOpen} aria-controls={accountId} onClick={() => { setNotificationsOpen(false); setAccountOpen(!accountOpen) }}>
                 <span className="sr-only">Account for {workspace.name}, {workspace.role}</span><Avatar name={workspace.name} /><span className="workspace-person" aria-hidden="true"><b>{workspace.name}</b><small>{workspace.role}</small></span><ChevronDown aria-hidden="true" data-icon="down" />
               </button>
               {accountOpen && <div className="workspace-account-panel" id={accountId}>
@@ -114,7 +136,7 @@ export function WorkspaceShell({ workspace, selected, onSelect, headingRef, deve
       </div>
       <nav className="workspace-mobile-nav" aria-label="Mobile navigation">
         {mobileItems.map(({ label, icon: Icon }) => destination(label, <><Icon aria-hidden="true" /><span>{label}</span></>))}
-        {destinations.length > 5 && <button ref={moreButton} type="button" aria-expanded={moreOpen} aria-haspopup="dialog" aria-current={moreActive ? 'page' : undefined} onClick={() => { returnFocus.current = null; setAccountOpen(false); setMoreOpen(true) }}><LayoutGrid aria-hidden="true" /><span>More</span></button>}
+        {destinations.length > 5 && <button ref={moreButton} type="button" aria-expanded={moreOpen} aria-haspopup="dialog" aria-current={moreActive ? 'page' : undefined} onClick={() => { returnFocus.current = null; setAccountOpen(false); setNotificationsOpen(false); setMoreOpen(true) }}><LayoutGrid aria-hidden="true" /><span>More</span></button>}
       </nav>
       <Dialog open={moreOpen} title="More from your workspace" onClose={() => setMoreOpen(false)} returnFocusRef={returnFocus} fallbackFocusRef={headingRef} footer={<Button onClick={() => setMoreOpen(false)}>Cancel</Button>}>
         <nav className="workspace-more" aria-label="All workspace destinations">{destinations.map(({ label, icon: Icon }) => destination(label, <><Icon aria-hidden="true" />{label}</>))}</nav>

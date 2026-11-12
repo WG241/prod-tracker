@@ -12,10 +12,14 @@ import { readAuthConfig } from './auth/config.ts'
 import { createAuth } from './auth/provider.ts'
 import { createAuthService } from './auth/service.ts'
 import { registerAuth, registerNavigation } from './auth/router.ts'
+import { registerAccountProfile } from './account/router.ts'
+import { registerNotifications } from './notifications/router.ts'
 import { apiErrorHandler, fatalGuard } from './errors.ts'
 import { privateStorage } from './private-storage.ts'
 import { registerEmployee } from './employee/router.ts'
 import { startHistoryCloser } from './employee/history-worker.ts'
+import { startEmailWorker } from './email/worker.ts'
+import { registerLineManager } from './line-manager/router.ts'
 
 fatalGuard()
 
@@ -35,7 +39,10 @@ async function main() {
   registerHealth(api, prisma)
   registerDataProof(api, prisma, config)
   registerAuth(api, prisma, authService, authConfig)
+  registerAccountProfile(api, prisma, authService, authConfig)
+  registerNotifications(api, prisma, authService, authConfig)
   registerEmployee(api, prisma, authService, authConfig)
+  registerLineManager(api, prisma, authService, authConfig)
   api.use((_request, response) => response.status(404).json({ error: 'Not found' }))
   app.use('/api', api)
   registerNavigation(app, authService, config.development)
@@ -61,17 +68,20 @@ async function main() {
 
   app.use(apiErrorHandler())
   const stopHistory = startHistoryCloser(prisma)
+  const stopEmail = startEmailWorker(prisma)
 
   let stopping = false
   const shutdown = async () => {
     if (stopping) return
     stopping = true
-    const deadline = setTimeout(() => process.exit(1), 10000).unref()
+    const deadline = setTimeout(() => process.exit(1), 15000).unref()
     const historyStopped = stopHistory()
+    const emailStopped = stopEmail()
     const httpClosed = new Promise<void>((done) => server.close(() => done()))
     await vite?.close()
     await httpClosed
     await historyStopped
+    await emailStopped
     await prisma.$disconnect()
     clearTimeout(deadline)
   }

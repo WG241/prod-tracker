@@ -3,7 +3,7 @@ import type { PrismaClient } from '../../src/generated/prisma/client.ts'
 import { databaseErrorCode } from '../db.ts'
 import { isoDay, shiftDay, watCalendarDay, watMidnight } from '../data-model/calendar.ts'
 import { captureTransaction } from './history-capture.ts'
-import { databaseClock, historyEvidence, historySources, protection, snapshotContext } from './history-evidence.ts'
+import { databaseClock, historyEvidence, historyPeople, protection } from './history-evidence.ts'
 import type { HistoryCode, SnapshotContext } from './history-evidence.ts'
 
 export type HistorySnapshotResult = { code: HistoryCode; changed: boolean; week?: string }
@@ -11,14 +11,6 @@ export type HistorySnapshotResult = { code: HistoryCode; changed: boolean; week?
 class SnapshotFailure extends Error {
   readonly code: HistoryCode
   constructor(code: HistoryCode) { super(code); this.code = code }
-}
-
-function validExistingSnapshot(value: { contextSnapshot: Parameters<typeof snapshotContext>[0]; snapshotAt: Date | null; expectedWorkingDaysSnapshot: number | null }, userId: string, freeze: Date) {
-  const context = snapshotContext(value.contextSnapshot, userId)
-  const days = value.expectedWorkingDaysSnapshot
-  return context && value.snapshotAt && value.snapshotAt >= freeze && days !== null && Number.isInteger(days) && days >= 0 && days <= 5
-    ? { context, days }
-    : null
 }
 
 export async function closeHistoryWeek(db: PrismaClient, weekId: string): Promise<HistorySnapshotResult> {
@@ -42,37 +34,49 @@ export async function closeHistoryWeek(db: PrismaClient, weekId: string): Promis
         distinct: ['userId'], select: { userId: true }, orderBy: { userId: 'asc' },
       })
       const requiredIds = new Set(required.map((row) => row.userId))
-      const existingTrackers = await tx.weeklyTracker.findMany({ where: { weekId }, select: { userId: true } })
+      const lockedPeople = JSON.stringify([...requiredIds])
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id IN (SELECT jsonb_array_elements_text(${lockedPeople}::jsonb)) ORDER BY id FOR UPDATE`
+      await tx.$queryRaw`SELECT id FROM "LeaveRecord" WHERE "userId" IN (SELECT jsonb_array_elements_text(${lockedPeople}::jsonb)) ORDER BY id FOR SHARE`
+      const existingTrackers = await tx.weeklyTracker.findMany({ where: { weekId } })
       if (existingTrackers.some((row) => !requiredIds.has(row.userId))) throw new SnapshotFailure('INVALID_SNAPSHOT')
+      const trackers = new Map(existingTrackers.map((row) => [row.userId, row]))
+      const people = new Map((await historyPeople(tx, [...requiredIds])).map((person) => [person.id, person]))
       const plans: { userId: string; assignmentId: string; context: SnapshotContext; days: number; trackerId: string; existing: boolean }[] = []
 
       for (const { userId } of required) {
-        await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`
-        await tx.$queryRaw`SELECT id FROM "EmploymentAssignment" WHERE "userId"=${userId} ORDER BY id FOR SHARE`
-        await tx.$queryRaw`SELECT id FROM "LeaveRecord" WHERE "userId"=${userId} ORDER BY id FOR SHARE`
-        const sources = await historySources(tx, userId, weekId)
-        if (!sources.person) throw new SnapshotFailure('INVALID_SOURCE')
-        const existing = sources.tracker ? validExistingSnapshot(sources.tracker, userId, week.freezesAt) : null
-        const evidence = historyEvidence(sources, week, proof, at)
-        const frozen: { context: SnapshotContext; days: number } | null = existing ?? (evidence.code === 'CAPTURE_PENDING' && evidence.context && evidence.assignmentId && evidence.days !== undefined
-          ? { context: evidence.context, days: evidence.days }
-          : null)
-        if (!frozen) throw new SnapshotFailure(evidence.code)
-        plans.push({ userId, assignmentId: existing ? sources.tracker!.assignmentId : evidence.assignmentId!, context: frozen.context, days: frozen.days, trackerId: sources.tracker?.id ?? '', existing: !!existing })
+        const person = people.get(userId)
+        if (!person) throw new SnapshotFailure('INVALID_SOURCE')
+        const tracker = trackers.get(userId) ?? null
+        const evidence = historyEvidence({ person, tracker }, week, proof, at)
+        if (!['ALREADY_CAPTURED', 'CAPTURE_PENDING'].includes(evidence.code) || !evidence.assignmentId || !evidence.context || evidence.days === undefined) {
+          throw new SnapshotFailure(evidence.code)
+        }
+        plans.push({ userId, assignmentId: evidence.assignmentId, context: evidence.context, days: evidence.days,
+          trackerId: tracker?.id ?? randomUUID(), existing: evidence.code === 'ALREADY_CAPTURED' })
       }
 
       const capturedAt = await databaseClock(tx)
       const publishedAt = week.rosterCapturedAt ?? capturedAt
-      for (const plan of plans) {
-        if (plan.existing) continue
-        const tracker = await tx.weeklyTracker.upsert({
-          where: { userId_weekId: { userId: plan.userId, weekId } },
-          create: { userId: plan.userId, weekId, assignmentId: plan.assignmentId, contextSnapshot: plan.context, expectedWorkingDaysSnapshot: plan.days, snapshotAt: capturedAt, createdAt: capturedAt },
-          update: { assignmentId: plan.assignmentId, contextSnapshot: plan.context, expectedWorkingDaysSnapshot: plan.days, snapshotAt: capturedAt },
-        })
-        plan.trackerId = tracker.id
-        await tx.auditEvent.create({ data: { action: 'TRACKER_SNAPSHOT_CAPTURED', targetType: 'WeeklyTracker', targetId: tracker.id, createdAt: capturedAt,
-          after: { week: result.week, assignmentId: plan.assignmentId, expectedDays: plan.days, referenceAt: new Date(week.freezesAt.getTime() - 1).toISOString(), capturedAt: capturedAt.toISOString() } } })
+      const pending = plans.filter(({ existing }) => !existing)
+      if (pending.length) {
+        // The owner and week locks keep the tracker identity stable through publication.
+        const changed = await tx.$executeRaw`
+          INSERT INTO "WeeklyTracker" (id, "userId", "weekId", "assignmentId", "contextSnapshot", "expectedWorkingDaysSnapshot", "snapshotAt", "createdAt", "updatedAt")
+          SELECT p."trackerId", p."userId", ${weekId}, p."assignmentId", p.context, p.days, ${capturedAt}, ${capturedAt}, ${capturedAt}
+          FROM jsonb_to_recordset(${JSON.stringify(pending)}::jsonb)
+            AS p("trackerId" text, "userId" text, "assignmentId" text, context jsonb, days integer)
+          ON CONFLICT ("userId", "weekId") DO UPDATE SET
+            "assignmentId" = EXCLUDED."assignmentId", "contextSnapshot" = EXCLUDED."contextSnapshot",
+            "expectedWorkingDaysSnapshot" = EXCLUDED."expectedWorkingDaysSnapshot", "snapshotAt" = EXCLUDED."snapshotAt",
+            "updatedAt" = EXCLUDED."updatedAt"
+          WHERE "WeeklyTracker".id = EXCLUDED.id AND "WeeklyTracker"."snapshotAt" IS NULL
+        `
+        if (changed !== pending.length) throw new SnapshotFailure('RETRY_LATER')
+        const referenceAt = new Date(week.freezesAt.getTime() - 1).toISOString()
+        await tx.auditEvent.createMany({ data: pending.map((plan) => ({
+          action: 'TRACKER_SNAPSHOT_CAPTURED', targetType: 'WeeklyTracker', targetId: plan.trackerId, createdAt: capturedAt,
+          after: { week: result.week, assignmentId: plan.assignmentId, expectedDays: plan.days, referenceAt, capturedAt: capturedAt.toISOString() },
+        })) })
       }
 
       const trackerIds = plans.map((plan) => plan.trackerId)
@@ -117,10 +121,14 @@ export async function closeHistoryWeek(db: PrismaClient, weekId: string): Promis
   }
 }
 
-export async function closeDueHistory(db: PrismaClient) {
-  const due = await db.workWeek.findMany({ where: { freezesAt: { lte: new Date() }, historySnapshot: null }, orderBy: { startsOn: 'asc' }, select: { id: true } })
+export async function closeDueHistory(db: PrismaClient, protectedSince: Date) {
+  const due = await db.workWeek.findMany({ where: { freezesAt: { gte: protectedSince, lte: new Date() }, historySnapshot: null },
+    orderBy: { startsOn: 'asc' }, select: { id: true, startsOn: true } })
   const results: HistorySnapshotResult[] = []
-  for (const week of due) results.push(await closeHistoryWeek(db, week.id))
+  for (const week of due) {
+    try { results.push(await closeHistoryWeek(db, week.id)) }
+    catch { results.push({ week: isoDay(week.startsOn), code: 'SERVICE_UNAVAILABLE', changed: false }) }
+  }
   return results
 }
 

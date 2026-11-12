@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { ArrowRight, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Grid2X2, Hourglass, Info, List, LockKeyhole, LockKeyholeOpen, OctagonAlert, Pause, Plus, Repeat2, Umbrella, Undo2, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Grid2X2, Hourglass, Info, List, LockKeyhole, LockKeyholeOpen, OctagonAlert, Pause, Plus, Repeat2, Shield, Umbrella, Undo2, X } from 'lucide-react'
 import { Button, IconButton } from '../../components/ui/Button.tsx'
 import { Badge } from '../../components/ui/Badge.tsx'
 import { SkeletonTaskList } from '../../components/ui/Skeleton.tsx'
@@ -21,6 +21,8 @@ import type { TaskOperations } from './operations.ts'
 import { useLeaveOperations } from './leave-operations.ts'
 import type { LeaveOperations } from './leave-operations.ts'
 import { LeaveFeedback } from './EmployeeLeave.tsx'
+import type { OwnTaskRole } from './mutations.ts'
+import { ownTaskRoutes } from './mutations.ts'
 import './employee.css'
 
 function TaskItem({ task, onOpen, onAction, stale }: { task: TaskEntry; onOpen: (id: string) => void; onAction: (task: TaskEntry, action: TaskAction) => void; stale: boolean }) {
@@ -37,10 +39,11 @@ function SavedNotice({ commit, message }: { commit: number; message: string }) {
   return visible ? <><p className="auth-toast">{message}</p><AnnounceEvent event={{ id: `task-saved:${commit}`, message, intent: 'status' }} /></> : null
 }
 
-export function EmployeeHome({ name, state, onState, headingRef, onSessionInvalid, operations, leaveOperations }: { name: string; state: EmployeeView; onState: (value: EmployeeView) => void; headingRef: RefObject<HTMLHeadingElement | null>; onSessionInvalid: () => void; operations: TaskOperations; leaveOperations: LeaveOperations }) {
+export function EmployeeHome({ name, state, onState, headingRef, onSessionInvalid, operations, leaveOperations, taskTarget, onTaskTargetHandled, role = 'EMPLOYEE' }: { name: string; state: EmployeeView; onState: (value: EmployeeView) => void; headingRef: RefObject<HTMLHeadingElement | null>; onSessionInvalid: () => void; operations: TaskOperations; leaveOperations: LeaveOperations; taskTarget?: { taskId: string; week: string } | null; onTaskTargetHandled?: () => void; role?: OwnTaskRole }) {
+  const manager = role === 'LINE_MANAGER'
   const { selection, page, attentionPage, view } = state
   const params = new URLSearchParams({ ...(selection?.kind === 'week' ? { week: selection.week } : selection?.kind === 'range' ? { from: selection.from, to: selection.to } : {}), page: String(page), attentionPage: String(attentionPage) })
-  const read = useEmployeeRead<HomeResponse>(`/api/employee/home?${params}`, onSessionInvalid)
+  const read = useEmployeeRead<HomeResponse>(`${ownTaskRoutes[role].list}?${params}`, onSessionInvalid)
   const data = read.data
   const store = useTaskOperations(operations)
   const leaveStore = useLeaveOperations(leaveOperations)
@@ -79,6 +82,16 @@ export function EmployeeHome({ name, state, onState, headingRef, onSessionInvali
   const previousPeriod = useRef('')
   const periodKey = JSON.stringify(selection)
   useEffect(() => { if (previousPeriod.current !== periodKey) { setTaskId(null); setAction(null); setDismissed(false); previousPeriod.current = periodKey } }, [periodKey])
+  useEffect(() => {
+    if (!taskTarget || selection?.kind !== 'week' || selection.week !== taskTarget.week || read.loading) return
+    const frame = requestAnimationFrame(() => {
+      setRangeOpen(false)
+      setAction(null)
+      setTaskId(taskTarget.taskId)
+      onTaskTargetHandled?.()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [taskTarget, selection, read.loading, onTaskTargetHandled])
   // The initial server choice becomes an explicit anchor, so a Monday refresh
   // reclassifies the selected week instead of silently navigating to a new one.
   useEffect(() => {
@@ -94,21 +107,23 @@ export function EmployeeHome({ name, state, onState, headingRef, onSessionInvali
   const inspection = !current || frozen
   const planningOpen = !!data?.week?.planningOpen && !read.stale
   function choose(next: Selection | null) {
+    if (taskTarget) onTaskTargetHandled?.()
     setTaskId(null); setDismissed(false)
     onState({ ...state, selection: next, anchor: next?.kind === 'week' ? next.week : anchor, page: 1, attentionPage: 1 })
   }
   function move(days: number) { if (anchor) { const next = shiftDate(anchor, days); if (next) choose({ kind: 'week', week: next }) } }
   return <>
     <header className="employee-heading">
-      <div><h1 ref={headingRef} tabIndex={-1}>Good morning, {name.trim() === 'Staff member' ? 'Staff member' : name.trim().split(/\s+/)[0] || 'Staff member'}{data && <span className={`employee-tracker-pill ${planningOpen ? 'open' : 'closed'}`}>{planningOpen ? <LockKeyholeOpen aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}Tracker {planningOpen ? 'open' : 'closed'}</span>}</h1><p>Focus on the work that matters. Keep your week up to date.</p></div>
+      <div><h1 ref={headingRef} tabIndex={-1}>{manager ? 'Your week, ' : 'Good morning, '}{name.trim() === 'Staff member' ? 'Staff member' : name.trim().split(/\s+/)[0] || 'Staff member'}{data && <span className={`employee-tracker-pill ${planningOpen ? 'open' : 'closed'}`}>{planningOpen ? <LockKeyholeOpen aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}Tracker {planningOpen ? 'open' : 'closed'}</span>}</h1><p>Focus on the work that matters. Keep your week up to date.</p></div>
       <div className="employee-week-controls"><IconButton label="Previous week" disabled={!anchor || !shiftDate(anchor, -7)} onClick={() => move(-7)}><ChevronLeft aria-hidden="true" /></IconButton><span className="employee-period-label"><b>{period?.kind === 'range' ? 'Custom range' : start ? `Week ${isoWeek(start)}` : 'This week'}</b><small>{periodLabel}</small></span><IconButton label="Next week" disabled={!anchor || !shiftDate(anchor, 7)} onClick={() => move(7)}><ChevronRight aria-hidden="true" /></IconButton><IconButton label="Open date range" disabled={!data || !anchor} onClick={() => { setTaskId(null); setRangeOpen(true) }}><CalendarDays aria-hidden="true" /></IconButton>{period?.kind === 'range' && <Button variant="ghost" size="small" onClick={() => anchor && choose({ kind: 'week', week: anchor })}>Clear <X aria-hidden="true" /></Button>}<button className="employee-this-week" onClick={() => choose(null)}>This week</button></div>
     </header>
     {data && <>
       {period?.kind === 'range' ? <p className="employee-banner employee-gray"><LockKeyhole aria-hidden="true" />Custom range. This is a read only view.</p>
         : period?.kind === 'week' && period.week > data.currentWeekStart ? <p className="employee-banner employee-gray"><Clock aria-hidden="true" />Week not open. Your next tracker opens on Monday {displayDate(period.week)}.</p>
-        : current && data.leave.paused ? <div className="employee-banner employee-teal"><Umbrella aria-hidden="true" /><span>You’re on leave until {data.leave.returnsOn && displayDate(data.leave.returnsOn)}. Your tracker is paused.</span><Button busy={leaveStore.record?.state === 'pending'} disabled={!data.leave.returnTarget || leaveStore.record?.state === 'uncertain' || read.stale || read.loading} size="small" onClick={() => data.leave.returnTarget && void leaveStore.send({ kind: 'RETURN', leaveId: data.leave.returnTarget }, onSessionInvalid)}>I’m back</Button></div>
+        : current && data.leave.paused ? <div className="employee-banner employee-teal"><Umbrella aria-hidden="true" /><span>{data.leave.returnsOn ? `You’re on leave until ${displayDate(data.leave.returnsOn)}. ` : ''}Your tracker is paused.</span>{!manager && <Button busy={leaveStore.record?.state === 'pending'} disabled={!data.leave.returnTarget || leaveStore.record?.state === 'uncertain' || read.stale || read.loading} size="small" onClick={() => data.leave.returnTarget && void leaveStore.send({ kind: 'RETURN', leaveId: data.leave.returnTarget }, onSessionInvalid)}>I’m back</Button>}</div>
         : inspection ? <p className="employee-banner employee-gray"><LockKeyhole aria-hidden="true" />Week ended. This is a frozen, read-only record.</p> : null}
       {data.week?.manualLockReason && <p className="employee-banner employee-gray"><LockKeyhole aria-hidden="true" />{data.week.manualLockReason}</p>}
+      {manager && <p className="employee-banner employee-teal"><Shield aria-hidden="true" />Your tasks are auto-approved on completion and visible to leadership only.</p>}
       {!!data.attention.total && !dismissed && <section className="ui-card employee-attention"><header className="ui-card-head"><div className="employee-attention-title"><span><Info aria-hidden="true" /></span><div><h2>Needs your attention</h2><p>{data.attention.total} {data.attention.total === 1 ? 'task needs' : 'tasks need'} a next step</p></div></div><IconButton label="Dismiss attention card" onClick={() => setDismissed(true)}><X aria-hidden="true" /></IconButton></header>{data.attention.items.map((task) => <div className="employee-attention-item" key={task.id}><div><h3>{task.title}</h3><p><b>{taskStatuses[task.status]}:</b> {task.reason ?? '—'}</p></div><div className="employee-actions">{!inspection && task.status === 'BLOCKED' && <><Button disabled={!task.permissions.canCarry || read.stale} size="small" onClick={() => act(task, 'CARRY')}><Repeat2 aria-hidden="true" />{task.carryRequested ? 'Clear carry over' : 'Carry over'}</Button><Button disabled={!task.permissions.canDelete || read.stale} variant="ghost" size="small" onClick={() => act(task, 'DELETE')}>Delete</Button></>}<Button size="small" onClick={() => setTaskId(task.id)}>{!inspection && task.status === 'DECLINED' ? 'Review task' : 'View'}<ArrowRight aria-hidden="true" /></Button></div></div>)}{data.attention.total > 25 && <Pagination value={data.attention} label="attention" onPage={(attentionPage) => { setTaskId(null); onState({ ...state, attentionPage }) }} />}</section>}
     </>}
     <section className="ui-card employee-week-card" aria-busy={read.loading || undefined}>
@@ -121,15 +136,15 @@ export function EmployeeHome({ name, state, onState, headingRef, onSessionInvali
       </div>
       <div className="employee-week-bottom"><Check aria-hidden="true" />Your updates are your submission. There’s nothing extra to submit.</div>
     </section>
-    <div className="employee-support"><span><LockKeyhole aria-hidden="true" /><span className="employee-support-text">Visible to your line manager and authorised leadership</span></span><a href="/employee/leave"><Umbrella aria-hidden="true" />Taking time off?</a></div>
+    <div className="employee-support"><span><LockKeyhole aria-hidden="true" /><span className="employee-support-text">{manager ? 'Visible to leadership only' : 'Visible to your line manager and authorised leadership'}</span></span><a href={manager ? '/line-manager/leave' : '/employee/leave'}><Umbrella aria-hidden="true" />Taking time off?</a></div>
     {data?.leave.repairRequired && <p className="employee-banner employee-amber">Your leave periods need review. Contact HR before making another leave change.</p>}
-    <LeaveFeedback operations={leaveStore} onRetry={() => { if (leaveStore.record) void leaveStore.send(leaveStore.record.operation, onSessionInvalid) }} onReload={() => { leaveStore.discard(); read.retry() }} />
-    {leaveStore.record?.state === 'committed' && read.error && <p className="employee-banner employee-amber">Your leave change was saved. Retry loading the latest tracker.</p>}
+    {!manager && <LeaveFeedback operations={leaveStore} onRetry={() => { if (leaveStore.record) void leaveStore.send(leaveStore.record.operation, onSessionInvalid) }} onReload={() => { leaveStore.discard(); read.retry() }} />}
+    {!manager && leaveStore.record?.state === 'committed' && read.error && <p className="employee-banner employee-amber">Your leave change was saved. Retry loading the latest tracker.</p>}
     {store.notice && <SavedNotice key={store.commits} commit={store.commits} message={store.notice} />}
     {store.notice && read.error && <p className="employee-banner employee-amber">Change saved. This view may be out of date. Retry loading it.</p>}
     {carryRecord && carryRecord.operation.kind === 'CARRY' && <div className="employee-banner employee-amber"><p>{carryRecord.state === 'pending' ? 'Saving carry over…' : carryRecord.error}</p>{carryRecord.state === 'uncertain' ? <Button onClick={() => void store.send(carryRecord.operation, onSessionInvalid)}>Retry</Button> : carryRecord.state === 'rejected' && <Button onClick={() => { const op = carryRecord.operation; if (op.kind === 'CARRY') store.discard(`CARRY:${op.taskId}`); read.retry() }}>Reload latest</Button>}</div>}
     {rangeOpen && data && anchor && <DateRange selection={selection} anchor={anchor} currentWeek={data.currentWeekStart} asOf={data.asOf} onClose={() => setRangeOpen(false)} onApply={(range) => { setRangeOpen(false); choose(range ?? { kind: 'week', week: anchor }) }} />}
-    {taskId && !rangeOpen && !action && <TaskDrawer operations={operations} onAction={act} key={taskId} taskId={taskId} inspection={inspection} onClose={() => setTaskId(null)} onSessionInvalid={onSessionInvalid} />}
-    {action && <TaskActionDialog key={`${action.kind}:${action.task?.id ?? 'new'}`} selection={action} operations={operations} returnFocusRef={opener} onSessionInvalid={onSessionInvalid} onClose={() => setAction(null)} onNext={(next) => { if (next.task) act(next.task, next.kind as TaskAction, true) }} onReload={() => { const id = action.task?.id; setAction(null); read.retry(); if (id) setTaskId(id); else choose(null) }} />}
+    {taskId && !rangeOpen && !action && <TaskDrawer role={role} operations={operations} onAction={act} key={taskId} taskId={taskId} inspection={inspection} onClose={() => setTaskId(null)} onSessionInvalid={onSessionInvalid} />}
+    {action && <TaskActionDialog role={role} key={`${action.kind}:${action.task?.id ?? 'new'}`} selection={action} operations={operations} returnFocusRef={opener} onSessionInvalid={onSessionInvalid} onClose={() => setAction(null)} onNext={(next) => { if (next.task) act(next.task, next.kind as TaskAction, true) }} onReload={() => { const id = action.task?.id; setAction(null); read.retry(); if (id) setTaskId(id); else choose(null) }} />}
   </>
 }

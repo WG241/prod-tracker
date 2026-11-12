@@ -7,6 +7,10 @@ export const roleRoutes = {
 } as const
 
 export type AuthRole = keyof typeof roleRoutes
+
+export function isPasswordRecoveryNotice(value: unknown) {
+  return value === 'password-changed' || value === 'password-outcome-unknown'
+}
 export interface SessionContext {
   user: { id: string; name: string; email: string }
   role: AuthRole

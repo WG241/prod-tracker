@@ -1,9 +1,8 @@
-import type { PrismaClient } from '../../src/generated/prisma/client.ts'
+import type { Prisma } from '../../src/generated/prisma/client.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
 import { routeContext } from '../../src/features/auth/contracts.ts'
 
-export async function staffContext(db: PrismaClient, id: string, requireReady = true) {
-  const now = new Date()
+export async function staffContext(db: Prisma.TransactionClient, id: string, requireReady = true, now = new Date()) {
   const person = await db.user.findUnique({ where: { id }, include: {
     authIdentity: true,
     assignments: { where: { effectiveTo: null, effectiveFrom: { lte: now } }, take: 2 },

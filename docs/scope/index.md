@@ -31,14 +31,14 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 10 | Employee task lifecycle | Employee | in-progress |
 | 11 | Employee history | Employee | in-progress |
 | 12 | Employee leave | Employee | in-progress |
-| 13 | Shared profile | Shared | planned |
-| 14 | In app notifications | Shared | planned |
-| 15 | Email alerts | Shared | planned |
-| 16 | Line Manager dashboard | Line Manager | planned |
-| 17 | Line Manager my tasks | Line Manager | planned |
-| 18 | Team history | Line Manager | planned |
-| 19 | Approvals | Line Manager | planned |
-| 20 | Line Manager leave | Line Manager | planned |
+| 13 | Shared profile | Shared | done |
+| 14 | In app notifications | Shared | in-progress |
+| 15 | Email alerts | Shared | in-progress |
+| 16 | Line Manager dashboard | Line Manager | done |
+| 17 | Line Manager my tasks | Line Manager | done |
+| 18 | Team history | Line Manager | done |
+| 19 | Approvals | Line Manager | done |
+| 20 | Line Manager leave | Line Manager | done |
 | 21 | Business Director dashboard | Business Director | planned |
 | 22 | Units hierarchy | Business Director | planned |
 | 23 | Business Director performance records | Business Director | planned |
@@ -63,8 +63,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 |------|------|---------------|
 | Foundations | [foundations.md](./foundations.md) | 1 to 3 and 5 done; 4 and 7 built with verification open; 6 implemented with checks open; 8 foundation built, real workflow gates open |
 | Employee | [employee.md](./employee.md) | 9 through 12 built with verification open |
-| Shared (all roles) | [shared.md](./shared.md) | 13 to 15 planned |
-| Line Manager | [line-manager.md](./line-manager.md) | 16 to 20 planned |
+| Shared (all roles) | [shared.md](./shared.md) | 13 done; 14 live unread tray started; 15 architecture confirmed |
+| Line Manager | [line-manager.md](./line-manager.md) | 16 to 20 done |
 | Business Director | [business-director.md](./business-director.md) | 21 to 24 planned |
 | Executive | [executive.md](./executive.md) | 25 to 28 planned |
 | HR / Admin | [hr-admin.md](./hr-admin.md) | 29 to 37 planned |
@@ -82,6 +82,8 @@ Out of scope for the current build pass, kept so the plan stays honest.
 - **Hosted auth proxy configuration (from spec 0005):** select and verify the hosting specific trusted proxy boundary before trusting forwarded client IP headers. Until then limits use the direct socket IP.
 - **Broader accessibility test matrix (from spec 0006):** Firefox, WebKit/real Safari, mobile screen readers and other assistive technology combinations remain outside the initial Chromium automation plus Windows NVDA/Chrome or Edge baseline; extend coverage through an explicit later decision.
 - **Hosted telemetry and stronger delivery (from spec 0007):** monitoring/analytics providers, operational alerts, source map upload and durable outbox delivery remain future decisions. Feature 8 starts with local files and best effort delivery.
+- **Additional shared notification/email work (from specs 0014 and 0015):** a read-message archive, automatic weekly reminder scheduling and signed delivery/bounce/complaint webhooks need later decisions. Existing later role features own their event producers and authorized destinations.
+- **Resend integration tooling research (from spec 0015):** optional Agent Skills/MCP discovery was deferred by the engineer; nothing is installed or connected. Provider account/domain/key setup remains a prerequisite for future controlled external verification.
 
 ## Legend
 

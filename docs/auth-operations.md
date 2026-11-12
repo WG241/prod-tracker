@@ -8,7 +8,7 @@ HTTP startup requires private `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` values.
 
 Development and deployment use **Neon PostgreSQL**. Put pooled `DATABASE_URL` and direct `DATABASE_URL_UNPOOLED` in `.env` (see `.env.example`).
 
-Operator CLIs (`db:seed`, `auth:seed`, `auth:provision`, `auth:prune`, and similar) may write to Neon. Shared checks in `server/auth/operator-target.ts` still reject database connection query overrides for host, hostaddr and service. Retain PostgreSQL certificate validation. Prefer Neon’s current connection string from the console; if `pg` warns about `sslmode`, use the documented `uselibpqcompat=true&sslmode=require` form or `sslmode=verify-full`.
+Operator CLIs (`db:seed`, `auth:seed`, `auth:provision`, `auth:prune`, and similar) may write to Neon. Shared checks in `server/auth/operator-target.ts` reject database connection query overrides for host, hostaddr and service. Copy the runtime connection string from Neon and set `sslmode=verify-full` to verify the certificate and hostname with node-postgres.
 
 Database migrate, seed and verify commands do not require auth settings. Apply migrations and generate the client before starting the updated app:
 

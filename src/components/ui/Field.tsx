@@ -33,7 +33,7 @@ export function InputField({ label, description, error, id, ...props }: FieldPro
   return <Field label={label} description={description} error={error} id={id}><input {...props} /></Field>
 }
 
-export function SelectField({ label, description, error, id, children, ...props }: FieldProps & SelectHTMLAttributes<HTMLSelectElement>) {
+export function SelectField({ label, description, error, id, children, ...props }: FieldProps & SelectHTMLAttributes<HTMLSelectElement> & RefAttributes<HTMLSelectElement>) {
   return <Field label={label} description={description} error={error} id={id}><select {...props}>{children}</select></Field>
 }
 

@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { EMPLOYEE_READ_TIMEOUT_MS, employeeReadInit } from '../../src/features/employee/useEmployeeRead.ts'
+import { EMPLOYEE_READ_TIMEOUT_MS, employeeReadInit, nextReadDelay } from '../../src/features/employee/useEmployeeRead.ts'
+
+test('read boundaries use server time and a minimum interval regardless of the device clock', (testContext) => {
+  const clock = { asOf: '2026-11-12T12:00:00Z', nextChangeAt: '2026-11-12T12:00:15Z', currentWeekStart: '2026-11-09', timezone: 'Africa/Lagos' } as const
+  const now = testContext.mock.method(Date, 'now', () => Date.parse('2026-11-12T12:10:00Z'))
+  assert.equal(nextReadDelay(clock), 15020)
+  now.mock.mockImplementation(() => Date.parse('2026-11-12T11:50:00Z'))
+  assert.equal(nextReadDelay(clock), 15020)
+  assert.equal(nextReadDelay({ ...clock, nextChangeAt: clock.asOf }), 1000)
+})
 
 test('employee reads use a bounded timeout so stalled responses reach Retry (Greptile P2 reproduction)', async () => {
   assert.equal(EMPLOYEE_READ_TIMEOUT_MS, 20_000)

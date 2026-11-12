@@ -1,7 +1,7 @@
 import express from 'express'
 import type { ErrorRequestHandler, Request, Response, Router } from 'express'
 import type { PrismaClient } from '../../src/generated/prisma/client.ts'
-import { roleRoutes, validPassword, wellFormed } from '../../src/features/auth/contracts.ts'
+import { isPasswordRecoveryNotice, roleRoutes, validPassword, wellFormed } from '../../src/features/auth/contracts.ts'
 import type { AuthConfig } from './config.ts'
 import { AuthFailure, messages } from './errors.ts'
 import type { AuthService } from './service.ts'
@@ -23,7 +23,7 @@ function originAllowed(request: Request, config: AuthConfig, mutation: boolean) 
 
 function sendFailure(response: Response, error: unknown) {
   const failure = error instanceof AuthFailure ? error : new AuthFailure('SERVICE_UNAVAILABLE', 503)
-  if (!(error instanceof AuthFailure) || error.status >= 500) console.error('Auth API failure', error)
+  if (failure.status >= 500) console.error('AUTH_API_FAILED')
   if (failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
   return response.status(failure.status).json({ error: { code: failure.code, message: failure.message } })
 }
@@ -105,6 +105,9 @@ export function registerNavigation(app: express.Express, service: AuthService, d
     const setHeader = response.setHeader.bind(response)
     response.setHeader = (name, value) => setHeader(name, name.toLowerCase() === 'cache-control' ? 'no-store' : value)
     response.setHeader('Cache-Control', 'no-store')
+    // A lost password response can leave the old session valid. Recovery still
+    // needs the sign-in form, even if that session has not yet been revoked.
+    if (request.path === '/sign-in' && isPasswordRecoveryNotice(request.query.notice)) return next()
     try {
       const result = await service.current(providerHeaders(request.headers))
       forwardCookies(response, result.headers)

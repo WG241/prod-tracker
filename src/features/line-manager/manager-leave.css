@@ -1,0 +1,16 @@
+.manager-leave-form { display: grid; gap: 14px; }
+.manager-leave-dates { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.manager-cover-card, .manager-leave-history { margin-top: 20px; }
+.manager-cover-columns { margin-top: 14px; }
+.manager-cover-list { list-style: none; display: grid; gap: 10px; padding: 0; }
+.manager-cover-evidence { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.manager-cover-evidence small, .manager-leave-muted { display: block; color: var(--color-muted); }
+.manager-leave-history-people, .manager-leave-history-people > span { display: flex; align-items: center; gap: 8px; }
+.manager-leave-history-people { flex-wrap: wrap; gap: 12px; }
+.manager-leave-history-people > svg { color: var(--color-blue); flex-shrink: 0; }
+.manager-leave-history-people .ui-avatar { flex-shrink: 0; width: 30px; height: 30px; }
+.manager-leave-days { border: 1px solid var(--color-line); border-radius: var(--radius-sm); padding: 4px 8px; white-space: nowrap; }
+.manager-previous-cover { border-inline-start: 1px solid var(--color-line); padding-inline-start: 20px; min-width: 0; }
+@media (max-width: 760px) {
+  .manager-previous-cover { border-inline-start: 0; border-top: 1px solid var(--color-line); padding: 14px 0 0; }
+}

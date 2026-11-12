@@ -5,6 +5,7 @@ import { day, isoDay } from '../data-model/calendar.ts'
 import { EmployeeFailure, leaveSummary, monday, nextChange, weekProjection } from './calendar.ts'
 import type { readQuery } from './calendar.ts'
 import type { WeekState } from '../../src/features/employee/contracts.ts'
+import type { OwnTaskRole } from '../../src/features/employee/mutations.ts'
 import { taskPermissions } from './permissions.ts'
 import { snapshotContext } from './history-evidence.ts'
 import { currentLeave } from './leave-state.ts'
@@ -38,7 +39,7 @@ async function taskPage(tx: Tx, where: Prisma.WeeklyTaskWhereInput, page: number
   return { items, page, pageSize: 25, total }
 }
 
-export async function employeePrincipal(tx: Tx, context: SessionContext, asOf: Date) {
+export async function employeePrincipal(tx: Tx, context: SessionContext, asOf: Date, role: OwnTaskRole = 'EMPLOYEE') {
   // Recheck current authority inside the same snapshot as the private projection.
   const person = await tx.user.findFirst({ where: { id: context.user.id, accountStatus: 'ACTIVE' }, select: {
     name: true, email: true, authIdentity: { select: { email: true, provisionedAt: true } },
@@ -47,8 +48,11 @@ export async function employeePrincipal(tx: Tx, context: SessionContext, asOf: D
   } })
   if (!person || !person.authIdentity?.provisionedAt || person.email.trim().toLowerCase() !== person.authIdentity.email || person.assignments.length !== 1) throw new EmployeeFailure('SESSION_REQUIRED', 401)
   const assignment = person.assignments[0]
-  if (assignment.role !== 'EMPLOYEE') throw new EmployeeFailure('FORBIDDEN', 403)
+  if (assignment.role !== role || context.role !== role) throw new EmployeeFailure('FORBIDDEN', 403)
   if (!assignment.businessId || !assignment.unitId) throw new EmployeeFailure('SESSION_REQUIRED', 401)
+  if (role === 'LINE_MANAGER' && (context.businessId !== assignment.businessId || context.unitId !== assignment.unitId || context.user.email !== person.email)) {
+    throw new EmployeeFailure('FORBIDDEN', 403)
+  }
   return { person, assignment }
 }
 export async function employeeCalendar(tx: Tx, context: SessionContext, asOf: Date, start: Date | null, assignment: Awaited<ReturnType<typeof employeePrincipal>>['assignment']) {
@@ -67,29 +71,33 @@ export async function employeeCalendar(tx: Tx, context: SessionContext, asOf: Da
     transitions = [...transitions, ...projection.transitions]
   }
   const ownedLeave = await currentLeave(tx, context.user.id, asOf)
-  return { week, leave: { paused: leave.paused, returnsOn: leave.returnsOn, returnTarget: ownedLeave.current?.canReturn ? ownedLeave.current.id : null, repairRequired: ownedLeave.state === 'REPAIR_REQUIRED' }, nextChangeAt: nextChange(asOf, [...transitions, new Date(ownedLeave.nextChangeAt)]) }
+  const paused = leave.paused || assignment.role === 'LINE_MANAGER' && ownedLeave.state === 'REPAIR_REQUIRED'
+  if (week && paused && week.startsOn === isoDay(monday(asOf))) week.pausedForLeave = true
+  return { week, leave: { paused, returnsOn: leave.returnsOn, returnTarget: assignment.role === 'EMPLOYEE' && ownedLeave.current?.canReturn ? ownedLeave.current.id : null, repairRequired: ownedLeave.state === 'REPAIR_REQUIRED' }, nextChangeAt: nextChange(asOf, [...transitions, new Date(ownedLeave.nextChangeAt)]) }
 }
 function clock(asOf: Date) {
   return { asOf: asOf.toISOString(), timezone: 'Africa/Lagos' as const, currentWeekStart: isoDay(monday(asOf)) }
 }
 
 export async function readHome(db: PrismaClient, context: SessionContext, query: Query, asOf: Date): Promise<HomeResponse> {
-  return db.$transaction(async (tx) => {
-    const { assignment } = await employeePrincipal(tx, context, asOf)
-    const { selection } = query
-    const where: Prisma.WeeklyTaskWhereInput = {
-      ownerId: context.user.id, deletedAt: null,
-      tracker: { userId: context.user.id, ...(selection.kind === 'week' ? { week: { startsOn: day(selection.week) } } : {}) },
-      ...(selection.kind === 'range' ? { startsOn: { lte: day(selection.to) }, endsOn: { gte: day(selection.from) } } : {}),
-    }
-    const state = await employeeCalendar(tx, context, asOf, selection.kind === 'week' ? day(selection.week) : null, assignment)
-    const tasks = await taskPage(tx, where, query.page, state.week, asOf)
-    const attention = await taskPage(tx, { ...where, status: { in: ['BLOCKED', 'DECLINED'] } }, query.attentionPage, state.week, asOf)
-    const current = state.week?.startsOn === isoDay(monday(asOf)) && asOf < new Date(state.week.freezesAt)
-    const canCreate = !!current && !!state.week?.planningOpen && !state.leave.paused
-    return { ...clock(asOf), ...state, selection, tasks, attention, canCreate,
-      createRestriction: canCreate ? null : !current ? 'This week is read only.' : state.leave.paused ? 'Your tracker is paused while on leave.' : 'Tracker is closed for new tasks.' }
-  }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 15000 })
+  return db.$transaction((tx) => readOwnHome(tx, context, query, asOf, 'EMPLOYEE'), { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 15000 })
+}
+
+export async function readOwnHome(tx: Tx, context: SessionContext, query: Query, asOf: Date, role: OwnTaskRole): Promise<HomeResponse> {
+  const { assignment } = await employeePrincipal(tx, context, asOf, role)
+  const { selection } = query
+  const where: Prisma.WeeklyTaskWhereInput = {
+    ownerId: context.user.id, deletedAt: null,
+    tracker: { userId: context.user.id, ...(selection.kind === 'week' ? { week: { startsOn: day(selection.week) } } : {}) },
+    ...(selection.kind === 'range' ? { startsOn: { lte: day(selection.to) }, endsOn: { gte: day(selection.from) } } : {}),
+  }
+  const state = await employeeCalendar(tx, context, asOf, selection.kind === 'week' ? day(selection.week) : null, assignment)
+  const tasks = await taskPage(tx, where, query.page, state.week, asOf)
+  const attention = await taskPage(tx, { ...where, status: { in: ['BLOCKED', 'DECLINED'] } }, query.attentionPage, state.week, asOf)
+  const current = state.week?.startsOn === isoDay(monday(asOf)) && asOf < new Date(state.week.freezesAt)
+  const canCreate = !!current && !!state.week?.planningOpen && !state.leave.paused
+  return { ...clock(asOf), ...state, selection, tasks, attention, canCreate,
+    createRestriction: canCreate ? null : !current ? 'This week is read only.' : state.leave.paused ? 'Your tracker is paused while on leave.' : 'Tracker is closed for new tasks.' }
 }
 
 function frozenOwner(value: Prisma.JsonValue, ownerId: string): DetailResponse['owner'] {
@@ -99,60 +107,76 @@ function frozenOwner(value: Prisma.JsonValue, ownerId: string): DetailResponse['
 }
 
 export async function readDetail(db: PrismaClient, context: SessionContext, taskId: string, query: Query, asOf: Date): Promise<DetailResponse> {
-  return db.$transaction(async (tx) => {
-    const { person, assignment } = await employeePrincipal(tx, context, asOf)
-    const historical = await tx.historyTaskSnapshot.findFirst({ where: { id: taskId, ownerId: context.user.id }, include: {
-      historyWeek: { include: { persons: { where: { userId: context.user.id } } } },
-      comments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-      reviews: { orderBy: { attemptNumber: 'desc' } },
-    } })
-    if (historical) {
-      const ownerContext = historical.historyWeek.persons[0]?.contextSnapshot
-      const owner = ownerContext ? frozenOwner(ownerContext, context.user.id) : { name: historical.ownerName, business: null, unit: null, manager: null, department: null }
-      const state = await employeeCalendar(tx, context, asOf, historical.historyWeek.startsOn, assignment)
-      if (!state.week) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
-      const latest = historical.reviews[0]
-      const commentsTotal = historical.comments.length
-      const commentsSkip = pageOffset(query.commentPage, commentsTotal)
-      const comments = commentsSkip === null ? [] : historical.comments.slice(commentsSkip, commentsSkip + 25)
-      const declined = latest?.decision === 'DECLINE' ? latest.reason : null
-      return {
-        ...clock(asOf), nextChangeAt: state.nextChangeAt,
-        task: { id: historical.id, revision: historical.revision, permissions: taskPermissions(historical.status, historical.historyWeek.capturedAt, state.week, asOf), title: historical.title, activity: historical.activity, startsOn: isoDay(historical.startsOn), endsOn: isoDay(historical.endsOn), status: historical.status, carryRequested: historical.carryRequested, carriedFrom: historical.carriedFrom, week: isoDay(historical.historyWeek.startsOn), reason: historical.status === 'BLOCKED' ? historical.blockerReason : historical.status === 'DECLINED' ? declined : null },
-        owner, week: state.week, frozen: true,
-        review: latest ? { attempt: latest.attemptNumber, state: latest.state, submittedAt: latest.submittedAt.toISOString(), decision: latest.decision ? { kind: latest.decision, method: latest.method ?? 'HUMAN', reason: latest.reason, decidedAt: latest.decidedAt?.toISOString() ?? latest.submittedAt.toISOString(), reviewer: latest.reviewerName ?? 'Staff member', coveredManager: latest.coveredManagerName } : null } : null,
-        comments: { items: comments.map((comment) => ({ id: comment.id, body: comment.body, author: comment.authorName, createdAt: comment.createdAt.toISOString() })), page: query.commentPage, pageSize: 25, total: commentsTotal },
-      }
-    }
-    const task = await tx.weeklyTask.findFirst({ where: { id: taskId, ownerId: context.user.id, deletedAt: null, tracker: { userId: context.user.id } }, select: {
-      ...taskSelect,
-      tracker: { select: { contextSnapshot: true, snapshotAt: true, expectedWorkingDaysSnapshot: true, week: true } },
-    } })
-    if (!task) throw new EmployeeFailure('NOT_FOUND', 404)
-    const frozen = asOf >= task.tracker.week.freezesAt
-    if (frozen && (!task.tracker.snapshotAt || task.tracker.snapshotAt < task.tracker.week.freezesAt || !Number.isInteger(task.tracker.expectedWorkingDaysSnapshot) || task.tracker.expectedWorkingDaysSnapshot! < 0 || task.tracker.expectedWorkingDaysSnapshot! > 5)) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
-    const owner = frozen ? frozenOwner(task.tracker.contextSnapshot, context.user.id) : {
-      name: person.name?.trim() || 'Staff member', business: assignment.business?.name ?? null, unit: assignment.unit?.name ?? null,
-      manager: assignment.manager?.name ?? null, department: assignment.departmentLabel,
-    }
-    const state = await employeeCalendar(tx, context, asOf, task.tracker.week.startsOn, assignment)
+  return db.$transaction((tx) => readTaskDetail(tx, context, taskId, query, asOf), { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 15000 })
+}
+
+export async function readTaskDetail(tx: Prisma.TransactionClient, context: SessionContext, taskId: string, query: Pick<Query, 'commentPage'>, asOf: Date, role: OwnTaskRole = 'EMPLOYEE'): Promise<DetailResponse> {
+  const { person, assignment } = await employeePrincipal(tx, context, asOf, role)
+  const historical = await tx.historyTaskSnapshot.findFirst({ where: { id: taskId, ownerId: context.user.id }, include: {
+    historyWeek: { include: { persons: { where: { userId: context.user.id } } } },
+    comments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    reviews: { orderBy: { attemptNumber: 'desc' } },
+  } })
+  if (historical) {
+    const ownerContext = historical.historyWeek.persons[0]?.contextSnapshot
+    const owned = await tx.weeklyTask.findFirst({ where: { id: taskId, ownerId: context.user.id, deletedAt: null,
+      tracker: { userId: context.user.id, weekId: historical.historyWeek.weekId } }, select: { revision: true, status: true } })
+    if (!owned) throw new EmployeeFailure('NOT_FOUND', 404)
+    if (role === 'LINE_MANAGER' && !ownerContext) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
+    const owner = ownerContext ? frozenOwner(ownerContext, context.user.id) : { name: historical.ownerName, business: null, unit: null, manager: null, department: null }
+    const state = await employeeCalendar(tx, context, asOf, historical.historyWeek.startsOn, assignment)
     if (!state.week) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
-    const latest = await tx.approvalRequest.findFirst({ where: { weeklyTaskId: taskId }, orderBy: { attemptNumber: 'desc' }, select: {
-      attemptNumber: true, state: true, submittedAt: true,
-      decision: { select: { decision: true, method: true, reason: true, decidedAt: true, actor: { select: { name: true } }, principal: { select: { name: true } } } },
-    } })
-    const total = await tx.taskComment.count({ where: { weeklyTaskId: taskId } })
-    const skip = pageOffset(query.commentPage, total)
-    const comments = skip === null ? [] : await tx.taskComment.findMany({ where: { weeklyTaskId: taskId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 25, skip,
-      select: { id: true, body: true, createdAt: true, author: { select: { name: true } } } })
-    const decision = latest?.decision
+    const archived = historical.reviews[0]
+    const latest = owned.status !== historical.status ? await currentReview(tx, taskId) : archived ? {
+      attempt: archived.attemptNumber, state: archived.state, submittedAt: archived.submittedAt.toISOString(),
+      decision: archived.decision ? { kind: archived.decision, method: archived.method ?? 'HUMAN', reason: archived.reason,
+        decidedAt: archived.decidedAt?.toISOString() ?? archived.submittedAt.toISOString(), reviewer: archived.reviewerName ?? 'Staff member',
+        coveredManager: archived.coveredManagerName } : null,
+    } : null
+    const commentsTotal = historical.comments.length
+    const commentsSkip = pageOffset(query.commentPage, commentsTotal)
+    const comments = commentsSkip === null ? [] : historical.comments.slice(commentsSkip, commentsSkip + 25)
+    const declined = latest?.decision?.kind === 'DECLINE' ? latest.decision.reason : null
     return {
-      ...clock(asOf), nextChangeAt: state.nextChangeAt, task: entry(task, state.week, asOf), owner, week: state.week, frozen,
-      review: latest ? { attempt: latest.attemptNumber, state: latest.state, submittedAt: latest.submittedAt.toISOString(), decision: decision ? {
-        kind: decision.decision, method: decision.method, reason: decision.reason, decidedAt: decision.decidedAt.toISOString(),
-        reviewer: decision.method === 'AUTOMATIC' ? 'System' : decision.actor?.name?.trim() || 'Staff member', coveredManager: decision.principal?.name ?? null,
-      } : null } : null,
-      comments: { items: comments.map((c) => ({ id: c.id, body: c.body, author: c.author.name?.trim() || 'Staff member', createdAt: c.createdAt.toISOString() })), page: query.commentPage, pageSize: 25, total },
+      ...clock(asOf), nextChangeAt: state.nextChangeAt,
+      task: { id: historical.id, revision: owned.revision, permissions: taskPermissions(owned.status, historical.historyWeek.capturedAt, state.week, asOf), title: historical.title, activity: historical.activity, startsOn: isoDay(historical.startsOn), endsOn: isoDay(historical.endsOn), status: owned.status, carryRequested: historical.carryRequested, carriedFrom: historical.carriedFrom, week: isoDay(historical.historyWeek.startsOn), reason: owned.status === 'BLOCKED' ? historical.blockerReason : owned.status === 'DECLINED' ? declined : null },
+      owner, week: state.week, frozen: true,
+      review: latest,
+      comments: { items: comments.map((comment) => ({ id: comment.id, body: comment.body, author: comment.authorName, createdAt: comment.createdAt.toISOString() })), page: query.commentPage, pageSize: 25, total: commentsTotal },
     }
-  }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 15000 })
+  }
+  const task = await tx.weeklyTask.findFirst({ where: { id: taskId, ownerId: context.user.id, deletedAt: null, tracker: { userId: context.user.id } }, select: {
+    ...taskSelect,
+    tracker: { select: { contextSnapshot: true, snapshotAt: true, expectedWorkingDaysSnapshot: true, week: true } },
+  } })
+  if (!task) throw new EmployeeFailure('NOT_FOUND', 404)
+  const frozen = asOf >= task.tracker.week.freezesAt
+  if (frozen && (!task.tracker.snapshotAt || task.tracker.snapshotAt < task.tracker.week.freezesAt || !Number.isInteger(task.tracker.expectedWorkingDaysSnapshot) || task.tracker.expectedWorkingDaysSnapshot! < 0 || task.tracker.expectedWorkingDaysSnapshot! > 5)) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
+  const owner = frozen ? frozenOwner(task.tracker.contextSnapshot, context.user.id) : {
+    name: person.name?.trim() || 'Staff member', business: assignment.business?.name ?? null, unit: assignment.unit?.name ?? null,
+    manager: assignment.manager?.name ?? null, department: assignment.departmentLabel,
+  }
+  const state = await employeeCalendar(tx, context, asOf, task.tracker.week.startsOn, assignment)
+  if (!state.week) throw new EmployeeFailure('SERVICE_UNAVAILABLE', 503)
+  const total = await tx.taskComment.count({ where: { weeklyTaskId: taskId } })
+  const skip = pageOffset(query.commentPage, total)
+  const comments = skip === null ? [] : await tx.taskComment.findMany({ where: { weeklyTaskId: taskId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 25, skip,
+    select: { id: true, body: true, createdAt: true, author: { select: { name: true } } } })
+  return {
+    ...clock(asOf), nextChangeAt: state.nextChangeAt, task: entry(task, state.week, asOf), owner, week: state.week, frozen,
+    review: await currentReview(tx, taskId),
+    comments: { items: comments.map((c) => ({ id: c.id, body: c.body, author: c.author.name?.trim() || 'Staff member', createdAt: c.createdAt.toISOString() })), page: query.commentPage, pageSize: 25, total },
+  }
+}
+
+async function currentReview(tx: Prisma.TransactionClient, taskId: string): Promise<DetailResponse['review']> {
+  const latest = await tx.approvalRequest.findFirst({ where: { weeklyTaskId: taskId }, orderBy: { attemptNumber: 'desc' }, select: {
+    attemptNumber: true, state: true, submittedAt: true,
+    decision: { select: { decision: true, method: true, reason: true, decidedAt: true, actor: { select: { name: true } }, principal: { select: { name: true } } } },
+  } })
+  const decision = latest?.decision
+  return latest ? { attempt: latest.attemptNumber, state: latest.state, submittedAt: latest.submittedAt.toISOString(), decision: decision ? {
+    kind: decision.decision, method: decision.method, reason: decision.reason, decidedAt: decision.decidedAt.toISOString(),
+    reviewer: decision.method === 'AUTOMATIC' ? 'System' : decision.actor?.name?.trim() || 'Staff member', coveredManager: decision.principal?.name ?? null,
+  } : null } : null
 }

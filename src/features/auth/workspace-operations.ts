@@ -1,3 +1,5 @@
+import type { OwnTaskRole } from '../employee/mutations.ts'
+
 /** Session actor key shared by task and leave operation stores. */
 export function sessionActor(userId: string, role: string) {
   return `${userId}:${role}`
@@ -15,10 +17,11 @@ export function clearWorkspaceOperations(task: { clear(): void }, leave: { clear
  * for a later focus or visibility revalidation.
  */
 export function restoreWorkspaceOperations(
-  task: { bind(actor: string): void },
+  task: { bind(actor: string, role?: OwnTaskRole): void },
   leave: { bind(actor: string): void },
   actor: string,
+  role?: OwnTaskRole,
 ) {
-  task.bind(actor)
+  task.bind(actor, role)
   leave.bind(actor)
 }

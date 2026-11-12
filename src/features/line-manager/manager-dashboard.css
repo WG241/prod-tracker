@@ -1,0 +1,119 @@
+.manager-dashboard { overflow-wrap: anywhere; }
+.manager-preview-options .ui-field { margin: 0; }
+.manager-heading { margin-bottom: var(--spacing-7); }
+.manager-heading > div > .eyebrow { color: var(--color-blue); margin-top: 0; }
+.manager-range-summary { color: var(--color-muted); font-size: var(--text-sm); margin: 0 0 var(--spacing-4); }
+.manager-sections { display: grid; gap: var(--spacing-6); }
+.manager-pair, .manager-metrics { display: grid; gap: var(--spacing-6); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manager-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-4\.5); align-items: end; margin: 0; }
+.manager-metric {
+  position: relative;
+  overflow: hidden;
+  min-height: 139px;
+  padding: var(--spacing-5) var(--content-padding-sm);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-4xl);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  box-shadow: var(--shadow-xs);
+  font-size: var(--text-sm);
+}
+.manager-metric:first-child {
+  min-height: 156px;
+  background: linear-gradient(140deg, var(--color-blue), var(--color-blue-dark));
+  border-color: var(--color-blue);
+  color: var(--color-surface);
+  box-shadow: var(--shadow-hero);
+}
+.manager-metric dt { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--spacing-2); }
+.manager-metric dt svg { flex: none; width: var(--spacing-4); height: var(--spacing-4); }
+.manager-metric:first-child dt svg {
+  position: absolute;
+  width: 95px;
+  height: 95px;
+  inset: auto 0 0 auto;
+  opacity: .15;
+  stroke-width: 1;
+}
+.manager-metric dd { margin: 0; }
+.manager-metric .manager-metric-value {
+  margin-top: var(--spacing-3);
+  color: var(--color-ink);
+  font-size: var(--text-display);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-display--line-height);
+}
+.manager-metric:first-child .manager-metric-value { color: inherit; }
+.manager-metric-value span { font-size: var(--text-xl); }
+.manager-table-card > .ui-card-body { padding: 0; }
+.manager-table-card .ui-table-scroll { border-radius: 0; }
+.manager-table-card .ui-table { min-width: 36rem; }
+.manager-missing .ui-table { min-width: 25rem; }
+.manager-table-card .ui-table :is(th, td) { min-width: 0; }
+.manager-table-card .ui-table th[scope="row"] { min-width: 9rem; }
+.manager-missing .ui-table th[scope="row"] { min-width: 7rem; }
+.manager-missing .ui-table td:nth-child(2) { min-width: 7rem; }
+.manager-table-card .ui-table td:last-child { white-space: nowrap; }
+.manager-table-card .skeleton-table { margin: 0; }
+.manager-person { display: flex; gap: var(--spacing-2\.5); align-items: center; }
+.manager-person .ui-avatar { width: var(--spacing-8); height: var(--spacing-8); font-size: var(--text-caption); }
+.manager-person small, .manager-notices small { display: block; color: var(--color-muted); font-size: var(--text-xs); }
+.manager-overdue-row { background: var(--color-amber-banner-bg); }
+.manager-overdue {
+  display: inline-flex;
+  gap: var(--spacing-1);
+  align-items: center;
+  padding: var(--spacing-0\.5) var(--spacing-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-rate-mid-bg);
+  color: var(--color-amber);
+  white-space: nowrap;
+}
+.manager-overdue svg { width: var(--spacing-3); height: var(--spacing-3); }
+.manager-empty { padding: var(--spacing-3) 0; color: var(--color-muted); }
+.manager-table-card .manager-empty { padding: var(--content-padding-sm); }
+.manager-table-card .employee-pagination { padding-inline: var(--spacing-4); }
+.manager-chart-legend { display: flex; flex-wrap: wrap; gap: var(--spacing-4); color: var(--color-muted); font-size: var(--text-xs); }
+.manager-chart-legend li { display: flex; gap: var(--spacing-1\.5); align-items: center; }
+.manager-chart-legend span { width: var(--spacing-3); border-block-start: 2px solid var(--series-color); }
+.manager-chart-legend .manager-series-completion span { border-block-start-style: dashed; }
+.manager-series-submission { --series-color: var(--color-blue); }
+.manager-series-completion { --series-color: var(--color-teal); }
+.manager-chart { display: block; width: 100%; height: auto; margin: var(--spacing-5) 0; stroke: none; }
+.manager-chart text { fill: var(--color-gray-600); font-size: var(--text-xs); }
+.manager-chart line { stroke: var(--color-line-soft); }
+.manager-chart :is(path, circle) { fill: none; stroke: var(--series-color); stroke-width: 2; }
+.manager-chart circle { fill: var(--color-surface); }
+.manager-chart .manager-series-completion path { stroke-dasharray: 5 3; }
+.manager-chart-data summary { color: var(--color-blue); cursor: pointer; padding-block: var(--spacing-2); font-size: var(--text-xs); }
+.manager-chart-data .ui-table :is(th, td) { min-width: 0; }
+.manager-notices { margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.manager-notices li { display: flex; align-items: flex-start; gap: var(--spacing-3); padding-block: var(--spacing-3\.5); border-bottom: 1px solid var(--color-line-soft); }
+.manager-notices li:last-child { border-bottom: 0; }
+.manager-notices li > svg { width: var(--spacing-4); height: var(--spacing-4); color: var(--color-blue); flex: none; }
+.manager-notices li > :is(div, p) { flex: 1; min-width: 0; }
+.manager-notices small { margin-top: var(--spacing-1); }
+.manager-comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 1200px) {
+  .manager-pair, .manager-metrics { gap: var(--spacing-4\.5); }
+}
+
+@media (max-width: 1023px) {
+  .manager-heading { flex-wrap: wrap; }
+  .manager-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .manager-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 639px) {
+  .manager-preview-options { align-items: stretch; flex-direction: column; }
+  .manager-heading .employee-week-controls { max-width: 100%; flex-wrap: wrap; }
+  .manager-heading .employee-period-label { min-width: 0; flex: 1; }
+  .manager-metrics { gap: var(--spacing-3); align-items: stretch; }
+  .manager-metric { padding-inline: var(--spacing-3); }
+  .manager-notices li { flex-wrap: wrap; }
+  .manager-chart text { font-size: var(--text-md); }
+}
