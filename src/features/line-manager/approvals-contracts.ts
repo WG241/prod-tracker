@@ -22,6 +22,7 @@ export type SubmittedWork = { title: string; activity: string; startsOn: string;
 export type ReviewAttempt = SubmittedWork & {
   requestId: string; taskId: string; revision: number; submittedAt: string; unit: string
   note: { body: string; createdAt: string } | null
+  decisionUnavailable?: 'HISTORY_UNAVAILABLE'
 }
 export type ReviewDetail = ReadClock & {
   attempt: ReviewAttempt; mode: 'PERMANENT' | 'RELIEF' | 'HISTORY'; coveredManager: string

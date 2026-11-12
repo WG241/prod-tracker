@@ -5,6 +5,11 @@ class ReadFailure extends Error {}
 
 export const EMPLOYEE_READ_TIMEOUT_MS = 20_000
 
+export function nextReadDelay({ asOf, nextChangeAt }: ReadClock) {
+  const delay = Date.parse(nextChangeAt) - Date.parse(asOf)
+  return Number.isFinite(delay) ? Math.max(1000, delay + 20) : null
+}
+
 /** Bounded fetch init so a stalled HTTP body reaches Retry instead of loading forever. */
 export function employeeReadInit(signal: AbortSignal, timeoutMs = EMPLOYEE_READ_TIMEOUT_MS): RequestInit {
   return {
@@ -53,12 +58,14 @@ export function useEmployeeRead<T extends ReadClock>(url: string | null, onSessi
   const data = result.url === url ? result.data : null
   useEffect(() => {
     if (!data || !url) return
-    const deadline = Date.parse(data.nextChangeAt)
+    const delay = nextReadDelay(data)
+    if (delay === null) return
+    const deadline = performance.now() + delay
     let timer: number
     const schedule = () => {
-      const remaining = deadline - Date.now()
+      const remaining = deadline - performance.now()
       if (remaining <= 0) { setRevision((r) => r + 1); return }
-      timer = window.setTimeout(schedule, Math.min(remaining + 20, 2147483647))
+      timer = window.setTimeout(schedule, Math.min(remaining, 2147483647))
     }
     schedule()
     return () => window.clearTimeout(timer)

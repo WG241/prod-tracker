@@ -8,10 +8,9 @@ import { withKnownRollbackRetry } from '../auth/owner-write.ts'
 import type { Actor } from '../auth/owner-write.ts'
 import { databaseClock } from '../db.ts'
 import { EmployeeFailure, monday } from '../employee/calendar.ts'
-import { snapshotContext } from '../employee/history-evidence.ts'
 import { parseOperation, taskIdentity, TaskFailure } from '../employee/task-validation.ts'
 import { recordApprovalOutcome, recordManagerComment } from '../notifications/events.ts'
-import { exactReview, pendingAuthority, reviewerScope } from './review-scope.ts'
+import { decisionReadiness, exactReview, pendingAuthority, reviewerScope } from './review-scope.ts'
 import type { ReviewSource } from './review-scope.ts'
 import { effective, managerPrincipal } from './scope.ts'
 import type { Tx } from './scope.ts'
@@ -124,17 +123,6 @@ function allowed(state: ReturnType<typeof pendingAuthority>): asserts state is E
   throw notFound()
 }
 
-async function assertFrozenEvidence(tx: Tx, row: ReviewSource, at: Date) {
-  const tracker = row.task.tracker, week = tracker.week
-  if (at < week.freezesAt) return
-  const days = tracker.expectedWorkingDaysSnapshot
-  if (!tracker.snapshotAt || tracker.snapshotAt < week.freezesAt || !snapshotContext(tracker.contextSnapshot, row.submittedById)
-    || days === null || days < 0 || days > 5 || !Number.isInteger(days)) throw unavailable()
-  if (week.historySnapshot && !await tx.historyTaskSnapshot.findFirst({ where: {
-    id: row.task.id, historyWeekId: week.historySnapshot.id, ownerId: row.submittedById,
-  }, select: { id: true } })) throw unavailable()
-}
-
 function assertConversation(row: ReviewSource, at: Date) {
   const { week } = row.task.tracker
   if (week.startsOn.getTime() !== monday(at).getTime() || at >= week.freezesAt || row.task.tracker.snapshotAt) throw new ManagerFailure('WORK_CLOSED')
@@ -163,10 +151,10 @@ export async function mutateApproval(db: PrismaClient, actor: Actor, requestId: 
       if (command.operation === 'LM_TASK_COMMENT') assertConversation(row, at)
       else {
         if (row.task.revision !== revisions[index]?.expectedTaskRevision) throw stale()
-        await assertFrozenEvidence(tx, row, at)
       }
       rows.push({ row, authority })
     }
+    if (command.operation !== 'LM_TASK_COMMENT' && (await decisionReadiness(tx, rows.map(({ row }) => row), at)).size !== rows.length) throw unavailable()
     const base = { version: 1 as const, operation: command.operation, requestId, appliedAt: at.toISOString(), changed: true as const }
     let result: ReviewReceipt
     if (command.operation === 'LM_TASK_COMMENT') {

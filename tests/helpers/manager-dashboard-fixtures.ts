@@ -9,7 +9,7 @@ import { monday } from '../../server/employee/calendar.ts'
 import { ensureWeek } from '../../server/employee/write-context.ts'
 import { historicalFixtures } from './historical-fixtures.ts'
 
-export async function managerFixtures(db: PrismaClient, config: AuthConfig) {
+export async function managerFixtures(db: PrismaClient, config: AuthConfig, { olderPending = false } = {}) {
   const password = process.env.LOCAL_AUTH_TEST_PASSWORD
   assert.ok(password)
   const tag = randomUUID()
@@ -81,6 +81,23 @@ export async function managerFixtures(db: PrismaClient, config: AuthConfig) {
     await tx.approvalDecision.create({ data: { requestId: completed.id, actorId: managerId, decision: 'APPROVE', method: 'HUMAN', decidedAt: at } })
     const approval = await task(ownerId, 'Work ready for review', 'AWAITING_APPROVAL')
     const request = await tx.approvalRequest.create({ data: submission(approval) })
+    if (olderPending) {
+      let older = shiftDay(start, -7)
+      while (await tx.workWeek.findUnique({ where: { startsOn: older } })) older = shiftDay(older, -7)
+      const endsOn = shiftDay(older, 4)
+      const olderWeek = await tx.workWeek.create({ data: { startsOn: older,
+        freezesAt: new Date(shiftDay(older, 5).getTime() - 3600000), planningLocksAt: shiftDay(older, 1) } })
+      const currentTracker = await tx.weeklyTracker.findUniqueOrThrow({ where: { id: approval.trackerId } })
+      const tracker = await tx.weeklyTracker.create({ data: { userId: ownerId, weekId: olderWeek.id, assignmentId: assignments.get(ownerId)!,
+        contextSnapshot: currentTracker.contextSnapshot as NonNullable<typeof currentTracker.contextSnapshot> } })
+      const series = await tx.taskSeries.create({ data: { ownerId } })
+      const olderTask = await tx.weeklyTask.create({ data: { ownerId, trackerId: tracker.id, seriesId: series.id,
+        title: 'Older pending submission', activity: approval.activity, startsOn: older, endsOn, status: 'AWAITING_APPROVAL' } })
+      const snapshot = submission(olderTask)
+      await tx.approvalRequest.create({ data: { ...snapshot, submittedAt: older, submissionSnapshot: {
+        ...snapshot.submissionSnapshot, startsOn: isoDay(older), endsOn: isoDay(endsOn), weekStartsOn: isoDay(older),
+      } } })
+    }
     const outside = await task(outsideId, 'Outside dashboard task', 'BLOCKED', 'This task is private to another team.')
     await task(managerId, 'Manager private work', 'IN_PROGRESS')
     return { week: isoDay(start), weekId: workWeek.id, blockerId: blocked.id, outsideTaskId: outside.id, requestId: request.id,

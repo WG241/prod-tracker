@@ -45,6 +45,29 @@ async function ensureCoverage(db: PrismaClient, start: string, apply: boolean): 
     return { week: start, code: 'CAPTURED', changed: true }
   })
 }
+
+export function ensureHistoryCoverage(db: PrismaClient) {
+  return captureTransaction(db, async (tx) => {
+    await tx.$executeRaw`SELECT id FROM "TrackerSettings" WHERE id='workforce-group' FOR SHARE`
+    const at = await databaseClock(tx)
+    const proof = await protection(tx)
+    if (!proof.valid || !proof.startedAt || !proof.settings?.trackingStartsOn) return { remaining: false, code: 'PROTECTION_UNAVAILABLE' as const }
+    const settings = proof.settings
+    const missing = await tx.$queryRaw<{ startsOn: Date }[]>`
+      SELECT week::date AS "startsOn"
+      FROM generate_series(${settings.trackingStartsOn}::timestamp, ${monday(at)}::timestamp, interval '7 days') week
+      WHERE NOT EXISTS (SELECT 1 FROM "WorkWeek" stored WHERE stored."startsOn" = week::date)
+        AND ${settings.updatedAt} <= ((week + interval '5 days') AT TIME ZONE 'Africa/Lagos')
+      ORDER BY week LIMIT 26
+    `
+    const data = missing.slice(0, 25).map(({ startsOn }) => {
+      const { state } = weekProjection(startsOn, null, settings, [], at, false)
+      return { startsOn, planningLocksAt: state.planningLocksAt, freezesAt: state.freezesAt }
+    })
+    if (data.length) await tx.workWeek.createMany({ data, skipDuplicates: true })
+    return { remaining: missing.length > data.length, code: 'CAPTURED' as const, protectedSince: proof.startedAt }
+  })
+}
 async function diagnosePerson(db: PrismaClient, weekId: string, userId: string): Promise<CaptureResult> {
   return db.$transaction(async (tx) => {
     const week = await tx.workWeek.findUnique({ where: { id: weekId } })
@@ -171,8 +194,18 @@ export function startHistoryCloser(db: PrismaClient) {
         logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', initialized.code)
         return
       }
-      const results = await closeDueHistory(db)
-      retry = results.some(({ code }) => code === 'RETRY_LATER')
+      const coverage = await ensureHistoryCoverage(db)
+      if (coverage.code !== 'CAPTURED') {
+        logDiagnostic('HISTORY_COVERAGE_FAILED', 'background', 'history-snapshot', coverage.code)
+        return
+      }
+      const results = await closeDueHistory(db, coverage.protectedSince)
+      retry = coverage.remaining || results.some(({ code }) => code === 'RETRY_LATER' || code === 'SERVICE_UNAVAILABLE')
+      for (const { code, week } of results) {
+        if (!['CAPTURED', 'ALREADY_CAPTURED', 'HISTORICAL_FACTS_UNAVAILABLE', 'RETRY_LATER'].includes(code)) {
+          console.error(JSON.stringify({ code: 'HISTORY_CLOSE_FAILED', reason: code, week }))
+        }
+      }
     }).catch((error: unknown) => {
       retry = true
       logDiagnostic('HISTORY_CLOSE_FAILED', 'background', 'history-snapshot', error)

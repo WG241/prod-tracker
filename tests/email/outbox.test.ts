@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { link, mkdtemp, readFile, rmdir, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout } from 'node:timers/promises'
 import { after, test } from 'node:test'
 import type { PrismaClient } from '../../src/generated/prisma/client.ts'
 import { authTestDatabase } from '../../server/auth/config.ts'
@@ -13,6 +14,7 @@ import { composeMessage, payloadHash } from '../../server/email/message.ts'
 import { persistPreview } from '../../server/email/preview.ts'
 import { claimEmail, retryFailedEmail, settleEmail, stillDispatchable } from '../../server/email/queue.ts'
 import { sendResend } from '../../server/email/resend.ts'
+import { startEmailWorker } from '../../server/email/worker.ts'
 import { recordLeaveEvent, recordPasswordChanged } from '../../server/notifications/events.ts'
 
 const db = createDatabase(authTestDatabase(process.env.TEST_DATABASE_URL, process.env.DATABASE_URL))
@@ -190,4 +192,30 @@ test('safe retry dry run is read only and apply records exactly one System audit
   const next = (await claimEmail(db, preview))?.claim
   assert.equal(next?.row.attemptCount, 2)
   await settleEmail(db, next!, { kind: 'failed', code: 'PREVIEW_WRITE_FAILED' })
+})
+
+test('the preview worker drains more than one batch without waiting for its next poll', async () => {
+  const person = await owner()
+  await withMailEnv(previewEnv, async () => {
+    const ids = await db.$transaction(async (tx) => {
+      const queued: string[] = []
+      for (let index = 0; index < 11; index++) queued.push(await recordPasswordChanged(tx, person.id, randomUUID(), new Date()))
+      return queued
+    })
+    const deliveries = await db.emailDelivery.findMany({ where: { notificationId: { in: ids } }, select: { id: true } })
+    const stop = startEmailWorker(db)
+    try {
+      const deadline = performance.now() + 15000
+      let completed = 0
+      do {
+        completed = await db.emailDelivery.count({ where: { notificationId: { in: ids }, state: 'PREVIEWED' } })
+        if (completed === ids.length) break
+        await setTimeout(100)
+      } while (performance.now() < deadline)
+      assert.equal(completed, 11)
+    } finally {
+      await stop()
+      await Promise.all(deliveries.map(({ id }) => unlink(join('.local', 'email-preview', `${id}.json`)).catch(() => {})))
+    }
+  })
 })

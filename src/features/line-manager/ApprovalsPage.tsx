@@ -15,27 +15,25 @@ import { Pagination } from '../employee/Pagination.tsx'
 import { useEmployeeRead } from '../employee/useEmployeeRead.ts'
 import type { NotificationTarget } from '../notifications/contracts.ts'
 import { approvalEndpoint, approvalTabs, periodParams } from './approvals-contracts.ts'
-import type { ApprovalTab, ApprovalsView, ReviewAttempt, ReviewList, ReviewPeople } from './approvals-contracts.ts'
+import type { ApprovalTab, ApprovalsView, ReviewList, ReviewPeople } from './approvals-contracts.ts'
 import { useManagerOperation } from './manager-operations.ts'
 import type { ManagerOperations } from './manager-operations.ts'
-import { DeclineDialog, ReviewDrawer, ReviewGroupDialog } from './ReviewDialogs.tsx'
+import { ReviewOverlay } from './ReviewOverlay.tsx'
+import type { ReviewSurface } from './ReviewOverlay.tsx'
 import { ChangeRecovery, TeamTaskDrawer } from './TeamTaskDrawer.tsx'
 import '../employee/employee.css'
 import './approvals.css'
 
-type Group = { kind: 'group'; personId: string; page: number; focusRequest?: string }
-type Task = { kind: 'review'; id: string; expected?: { taskId: string; week: string }; back?: Group }
-type Overlay = Group | Task | { kind: 'reason'; attempt: ReviewAttempt; back: Group | Task } | { kind: 'blocker'; id: string }
-export type ApprovalOpen = { personId: string } | Extract<NotificationTarget, { kind: 'REVIEW_REQUEST' }>
+type Overlay = ReviewSurface | { kind: 'blocker'; id: string }
+export type ApprovalOpen = Extract<NotificationTarget, { kind: 'REVIEW_REQUEST' }>
 const tabs: Record<ApprovalTab, string> = { AWAITING: 'Awaiting', APPROVED: 'Approved', DECLINED: 'Declined', BLOCKERS: 'Blockers' }
 
 export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, operations, onSessionInvalid }: {
   view: ApprovalsView; onView: (view: ApprovalsView) => void; open: ApprovalOpen | null; onOpenHandled: () => void
   headingRef: RefObject<HTMLHeadingElement | null>; operations: ManagerOperations; onSessionInvalid: () => void
 }) {
-  const [overlay, setOverlay] = useState<Overlay | null>(() => open ? 'kind' in open
-    ? { kind: 'review', id: open.requestId, expected: { taskId: open.taskId, week: open.week } }
-    : { kind: 'group', personId: open.personId, page: 1 } : null)
+  const [overlay, setOverlay] = useState<Overlay | null>(() => open
+    ? { kind: 'review', id: open.requestId, expected: { taskId: open.taskId, week: open.week } } : null)
   const [rangeOpen, setRangeOpen] = useState(false)
   const record = useManagerOperation(operations)
   const commit = record?.phase === 'committed' ? record.id : null
@@ -57,17 +55,6 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
     retryPeople()
   }, [commit, retryList, retryPeople])
   const settled = record?.phase === 'committed' && 'items' in record.result
-  const closedOn = useRef(commit)
-  useEffect(() => {
-    if (!settled || !commit || closedOn.current === commit) return
-    closedOn.current = commit
-    const timer = window.setTimeout(() => setOverlay((current) => {
-      if (current?.kind === 'reason') return current.back.kind === 'group' ? current.back : current.back.back ?? null
-      if (current?.kind === 'review') return current.back ?? null
-      return current
-    }), 0)
-    return () => window.clearTimeout(timer)
-  }, [settled, commit])
 
   const data = read.data
   const clock = data ?? people.data
@@ -75,9 +62,10 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
   const anchor = view.selection?.kind === 'week' ? view.selection.week : current
   const range = view.selection?.kind === 'range' ? view.selection : null
   const weeks = data?.weeks ?? []
-  const periodLabel = range ? 'Custom range' : view.selection?.kind === 'week' ? `Week ${isoWeek(view.selection.week)}` : 'All pending weeks'
+  const allWeeks = view.tab === 'AWAITING' ? 'All pending weeks' : 'All workweeks'
+  const periodLabel = range ? 'Custom range' : view.selection?.kind === 'week' ? `Week ${isoWeek(view.selection.week)}` : allWeeks
   const dateLabel = range ? `${displayDate(range.from)} to ${displayDate(range.to)}`
-    : view.selection?.kind === 'week' ? `${displayDate(view.selection.week, false)} to ${displayDate(shiftDate(view.selection.week, 4) ?? view.selection.week)}` : 'All workweeks'
+    : view.selection?.kind === 'week' ? `${displayDate(view.selection.week, false)} to ${displayDate(shiftDate(view.selection.week, 4) ?? view.selection.week)}` : null
   const options = people.data?.people.items ?? []
   function change(update: Partial<ApprovalsView>) {
     setOverlay(null)
@@ -88,12 +76,6 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
     const week = anchor ? shiftDate(anchor, days) : null
     if (week) choose({ kind: 'week', week })
   }
-  function closeOverlay() {
-    if (overlay?.kind === 'reason') setOverlay(overlay.back)
-    else if (overlay?.kind === 'review' && overlay.back) setOverlay({ ...overlay.back, focusRequest: overlay.id })
-    else setOverlay(null)
-  }
-  const shared = { operations, onSessionInvalid, headingRef, onClose: closeOverlay }
   const stale = read.stale || read.loading || !!read.error
   const resultLabel = settled ? record.result.operation === 'LM_DECLINE' ? 'Decline sent.' : 'Approval saved.' : ''
   return <div className="manager-approvals">
@@ -101,7 +83,7 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
       <div><h1 ref={headingRef} tabIndex={-1}>Approvals</h1><p>Review completions and track feedback and blockers for your team.</p></div>
       <div className="employee-week-controls" role="group" aria-label="Approval period">
         <IconButton label="Previous week" disabled={!anchor || !shiftDate(anchor, -7)} onClick={() => move(-7)}><ChevronLeft aria-hidden="true" /></IconButton>
-        <span className="employee-period-label"><b>{periodLabel}</b><small>{dateLabel}</small></span>
+        <span className="employee-period-label"><b>{periodLabel}</b>{dateLabel && <small>{dateLabel}</small>}</span>
         <IconButton label="Next week" disabled={!anchor || !shiftDate(anchor, 7)} onClick={() => move(7)}><ChevronRight aria-hidden="true" /></IconButton>
         <IconButton label="Open date range" disabled={!clock} onClick={() => setRangeOpen(true)}><CalendarDays aria-hidden="true" /></IconButton>
         <button type="button" className="employee-this-week" disabled={!current} onClick={() => current && choose({ kind: 'week', week: current })}>This week</button>
@@ -112,7 +94,7 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
         {tabs[tab]}{data ? ` (${data.counts[tab]})` : ''}</button>)}
     </div>
     <div className="employee-history-filters team-history-filters review-filters">
-      <InputField type="search" label="Search employees" placeholder="Search employee or unit…" maxLength={120} value={view.search}
+      <InputField type="search" label="Find an employee to filter by" placeholder="Search employee or unit…" maxLength={120} value={view.search}
         onChange={(event) => change({ search: event.target.value, page: view.page })} />
       <SelectField label="Employee" value={view.personId} onChange={(event) => change({ personId: event.target.value, peoplePage: view.peoplePage })}>
         <option value="">All employees</option>
@@ -121,7 +103,7 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
       </SelectField>
       <SelectField label="Workweek" value={range ? 'range' : view.selection?.kind === 'week' ? view.selection.week : ''}
         onChange={(event) => { const week = event.target.value; if (week !== 'range') choose(week ? { kind: 'week', week } : null) }}>
-        <option value="">{view.tab === 'AWAITING' ? 'All pending weeks' : 'All workweeks'}</option>
+        <option value="">{allWeeks}</option>
         {range && <option value="range">Custom range</option>}
         {[...new Set([...weeks, ...(view.selection?.kind === 'week' ? [view.selection.week] : [])])].sort().reverse()
           .map((week) => <option key={week} value={week}>Week {isoWeek(week)} · {displayDate(week)}</option>)}
@@ -168,15 +150,11 @@ export function ApprovalsPage({ view, onView, open, onOpenHandled, headingRef, o
     </section>
     {rangeOpen && anchor && clock && <DateRange selection={range} anchor={anchor} currentWeek={clock.currentWeekStart} asOf={clock.asOf}
       onClose={() => setRangeOpen(false)} onApply={(selection) => { setRangeOpen(false); choose(selection) }} />}
-    {overlay?.kind === 'group' && <ReviewGroupDialog key={overlay.personId} {...shared} personId={overlay.personId} selection={view.selection} focusRequest={overlay.focusRequest}
-      page={overlay.page} onPage={(page) => setOverlay({ ...overlay, page })}
-      onDetail={(attempt) => setOverlay({ kind: 'review', id: attempt.requestId, back: overlay })}
-      onDecline={(attempt) => setOverlay({ kind: 'reason', attempt, back: { ...overlay, focusRequest: attempt.requestId } })} />}
-    {overlay?.kind === 'review' && <ReviewDrawer key={overlay.id} {...shared} id={overlay.id} expected={overlay.expected}
-      onResolved={(attempt) => { if (overlay.expected && view.personId !== attempt.ownerId) onView({ ...view, personId: attempt.ownerId, page: 1 }) }}
-      onDecline={(attempt) => setOverlay({ kind: 'reason', attempt, back: overlay })} />}
-    {overlay?.kind === 'reason' && <DeclineDialog key={overlay.attempt.requestId} {...shared} attempt={overlay.attempt} onReload={closeOverlay} />}
-    {overlay?.kind === 'blocker' && <TeamTaskDrawer key={overlay.id} {...shared} id={overlay.id} commit={commit} />}
+    {overlay && overlay.kind !== 'blocker' && <ReviewOverlay surface={overlay} onSurface={setOverlay} selection={view.selection}
+      headingRef={headingRef} operations={operations} onSessionInvalid={onSessionInvalid}
+      onResolved={(attempt) => { if (view.personId !== attempt.ownerId) onView({ ...view, personId: attempt.ownerId, page: 1 }) }} />}
+    {overlay?.kind === 'blocker' && <TeamTaskDrawer key={overlay.id} id={overlay.id} headingRef={headingRef} operations={operations}
+      onSessionInvalid={onSessionInvalid} onClose={() => setOverlay(null)} commit={commit} />}
     {settled && commit && resultLabel && <NoticeToast key={commit} id={`approval-result:${commit}`} message={resultLabel} />}
   </div>
 }

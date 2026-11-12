@@ -59,7 +59,7 @@ type DashboardProps = {
   onPage: (section: DashboardSection, page: number) => void
   onRetry: () => void
   onReloadLatest: () => void
-  onApprovals: (group?: ApprovalGroup) => void
+  onApprovals: (group?: ApprovalGroup, opener?: HTMLButtonElement) => void
   onComment: (task: BlockedTask) => void
   onRemind?: (person: MissingSubmission) => void
   reminderBusy?: (person: MissingSubmission) => boolean
@@ -118,7 +118,7 @@ export function ManagerDashboard({ headingRef, anchor, currentWeek, asOf, range,
                 <th scope="row"><div className="manager-person"><Avatar name={group.employeeName} /><span>{group.employeeName}<small>{group.unitName}</small></span></div></th>
                 <td>{group.taskCount} {group.taskCount === 1 ? 'task' : 'tasks'} · oldest {wait}</td>
                 <td>{group.overdue ? <span className="manager-overdue"><Clock aria-hidden="true" />{wait} · Overdue</span> : wait}</td>
-                <td><Button size="small" disabled={!group.requestId || !!stale} onClick={() => onApprovals(group)} title="Review decisions are coming soon" aria-label={`Review work for ${group.employeeName}`}>Review <ArrowRight aria-hidden="true" /></Button></td>
+                <td><Button size="small" disabled={!group.requestId || !!stale} onClick={(event) => onApprovals(group, event.currentTarget)} aria-label={`Review work for ${group.employeeName}`}>Review <ArrowRight aria-hidden="true" /></Button></td>
               </tr>
             })}
           </Table> : <Empty>{data.approvals.total ? 'No approvals on this page.' : 'No completions are awaiting your approval.'}</Empty>}

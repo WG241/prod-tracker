@@ -28,7 +28,7 @@ import type { LeaveView } from '../employee/leave-contracts.ts'
 import { LeaveOperations } from '../employee/leave-operations.ts'
 import { clearWorkspaceOperations, restoreWorkspaceOperations, sessionActor } from './workspace-operations.ts'
 import { ManagerOperations } from '../line-manager/manager-operations.ts'
-import type { ApprovalGroup, DashboardSelectionState } from '../line-manager/dashboard-view.ts'
+import type { DashboardSelectionState } from '../line-manager/dashboard-view.ts'
 import { initialTeamHistoryView } from '../line-manager/team-history-contracts.ts'
 import { initialApprovalsView } from '../line-manager/approvals-contracts.ts'
 import { initialManagerLeaveView } from '../line-manager/leave-contracts.ts'
@@ -141,10 +141,10 @@ function AuthenticatedWorkspace({ context, notice, employeeView, onEmployeeView,
     if (window.location.pathname + window.location.search !== next) window.history.pushState(null, '', next)
     setPath(window.location.pathname)
   }
-  function openApprovals(group?: ApprovalGroup) {
+  function openApprovals() {
     setTeamTarget(null)
-    setApprovals({ ...initialApprovalsView, personId: group?.employeeId ?? '' })
-    setApprovalOpen(group ? { personId: group.employeeId } : null)
+    setApprovals(initialApprovalsView)
+    setApprovalOpen(null)
     setApprovalEpoch((epoch) => epoch + 1)
     navigate('/line-manager/approvals')
   }

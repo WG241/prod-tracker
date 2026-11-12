@@ -30,6 +30,9 @@ export async function protection(tx: HistoryTx) {
 }
 export type Protection = Awaited<ReturnType<typeof protection>>
 const sourceInclude = { assignments: { orderBy: { effectiveFrom: 'asc' as const }, include: { business: true, unit: true, manager: true } }, leaves: true } satisfies Prisma.UserInclude
+export function historyPeople(tx: HistoryTx, userIds: string[]) {
+  return tx.user.findMany({ where: { id: { in: userIds } }, include: sourceInclude })
+}
 export async function historySources(tx: HistoryTx, userId: string, weekId: string) {
   const person = await tx.user.findUnique({ where: { id: userId }, include: sourceInclude })
   const tracker = await tx.weeklyTracker.findUnique({ where: { userId_weekId: { userId, weekId } } })

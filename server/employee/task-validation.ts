@@ -34,8 +34,14 @@ function record(value: unknown, allowed: string[], required = allowed) {
   if (Object.keys(result).some((key) => !allowed.includes(key)) || required.some((key) => !Object.hasOwn(result, key))) return invalid()
   return result
 }
+export const taskTextLimits = { title: 120, activity: 6000 } as const
+
+export function validTaskText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && wellFormed(value) && !!value.trim() && value.trim().length <= max && !value.includes('\0')
+}
+
 function text(value: unknown, field: string, max: number) {
-  if (typeof value !== 'string' || !wellFormed(value) || !value.trim() || value.trim().length > max || value.includes('\0')) return invalid({ [field]: `Enter ${field === 'body' ? 'a reply' : field} of 1 to ${max.toLocaleString('en-US')} characters.` })
+  if (!validTaskText(value, max)) return invalid({ [field]: `Enter ${field === 'body' ? 'a reply' : field} of 1 to ${max.toLocaleString('en-US')} characters.` })
   return value.trim()
 }
 function date(value: unknown, field: string) {
@@ -65,7 +71,8 @@ export function parseOperation(kind: TaskOperation['kind'], taskId: unknown, bod
   if (kind === 'CREATE' || kind === 'EDIT') {
     const keys = ['title', 'activity', 'startsOn', 'endsOn', 'carryRequested']
     const input = record(body, [...keys, ...(kind === 'CREATE' ? ['week'] : ['status', 'blockerReason'])], [...keys, ...(kind === 'CREATE' ? ['week'] : [])])
-    const draft: TaskDraft = { title: text(input.title, 'title', 120), activity: text(input.activity, 'activity', 6000), startsOn: date(input.startsOn, 'startsOn'), endsOn: date(input.endsOn, 'endsOn'), carryRequested: flag(input.carryRequested) }
+    const draft: TaskDraft = { title: text(input.title, 'title', taskTextLimits.title), activity: text(input.activity, 'activity', taskTextLimits.activity),
+      startsOn: date(input.startsOn, 'startsOn'), endsOn: date(input.endsOn, 'endsOn'), carryRequested: flag(input.carryRequested) }
     if (kind === 'CREATE') {
       const week = date(input.week, 'week')
       if (parseDay(week).getUTCDay() !== 1) return invalid()

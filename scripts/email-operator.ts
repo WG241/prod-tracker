@@ -19,11 +19,13 @@ async function main() {
   const db = createDatabase(connection)
   try {
     if (command === 'inspect') {
-      const { values } = parseArgs({ args, options: { state: { type: 'string' }, limit: { type: 'string' } } })
+      const { values } = parseArgs({ args, options: { state: { type: 'string' }, limit: { type: 'string' }, oldest: { type: 'boolean' } } })
       const state = values.state as EmailState | undefined
       const limit = values.limit ?? '25'
       if ((state && !Object.hasOwn(EmailState, state)) || !/^[1-9]\d{0,2}$/.test(limit) || Number(limit) > 100) throw new Error('Invalid inspect options')
-      const rows = await db.emailDelivery.findMany({ where: { state }, take: Number(limit), orderBy: [{ scheduledAt: 'desc' }, { id: 'desc' }], select: {
+      const rows = await db.emailDelivery.findMany({ where: { state }, take: Number(limit), orderBy: values.oldest
+        ? [{ enqueuedAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }]
+        : [{ scheduledAt: 'desc' }, { id: 'desc' }], select: {
         id: true, state: true, attemptCount: true, enqueuedAt: true, scheduledAt: true, lastAttemptAt: true,
         firstUncertainAt: true, sentAt: true, failureCode: true, notification: { select: { kind: true } },
       } })

@@ -39,14 +39,16 @@ export function startEmailWorker(db: PrismaClient) {
     if (config.mode === 'off') return
     if (config.mode === 'invalid' && !reportedInvalid) diagnostic('EMAIL_CONFIGURATION_INVALID')
     reportedInvalid = config.mode === 'invalid'
+    let worked = false
     for (let admitted = 0; admitted < 10 && !stopped && performance.now() < deadline; admitted++) {
       if (config.mode === 'catch-all' || config.mode === 'live') {
         const delay = 1000 - (performance.now() - lastExternal)
         if (delay > 0) await pause(delay)
-        if (stopped || performance.now() >= deadline) return
+        if (stopped || performance.now() >= deadline) break
       }
       const pick = await claimEmail(db, config)
       if (!pick) return
+      worked = true
       if (!pick.claim) { if (pick.diagnostic) diagnostic(pick.diagnostic); continue }
       const { claim } = pick
       if (!await stillDispatchable(db, claim) || !dispatchConfigurationMatches(claim)) continue
@@ -63,6 +65,7 @@ export function startEmailWorker(db: PrismaClient) {
       const failure = await settleEmail(db, claim, outcome)
       if (failure) diagnostic(failure)
     }
+    if (worked && !stopped) wakePending = true
   }
 
   function wake() {

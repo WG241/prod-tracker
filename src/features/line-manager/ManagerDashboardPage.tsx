@@ -4,7 +4,10 @@ import { NoticeToast } from '../../components/ui/NoticeToast.tsx'
 import { displayDate } from '../employee/date.ts'
 import { useEmployeeRead } from '../employee/useEmployeeRead.ts'
 import { ManagerDashboard } from './ManagerDashboard.tsx'
-import type { ApprovalGroup, DashboardRead, DashboardResponse, DashboardSection, DashboardSelectionState } from './dashboard-view.ts'
+import type { DashboardRead, DashboardResponse, DashboardSection, DashboardSelectionState } from './dashboard-view.ts'
+import type { Selection } from '../employee/contracts.ts'
+import { ReviewOverlay } from './ReviewOverlay.tsx'
+import type { ReviewSurface } from './ReviewOverlay.tsx'
 import { useManagerOperation } from './manager-operations.ts'
 import type { ManagerOperations } from './manager-operations.ts'
 import { ChangeRecovery, TeamTaskDrawer } from './TeamTaskDrawer.tsx'
@@ -23,13 +26,16 @@ function parameters({ selection, pages }: DashboardSelectionState) {
 
 export function ManagerDashboardPage({ headingRef, view, onView, operations, onSessionInvalid, onApprovals, onBadge }: {
   headingRef: RefObject<HTMLHeadingElement | null>; view: DashboardSelectionState; onView: (view: DashboardSelectionState) => void;
-  operations: ManagerOperations; onSessionInvalid: () => void; onApprovals: (group?: ApprovalGroup) => void; onBadge: (count: number) => void;
+  operations: ManagerOperations; onSessionInvalid: () => void; onApprovals: () => void; onBadge: (count: number) => void;
 }) {
   const params = parameters(view)
   const read = useEmployeeRead<DashboardResponse>(`/api/line-manager/dashboard${params ? `?${params}` : ''}`, onSessionInvalid)
   const data = read.data
   const record = useManagerOperation(operations)
   const [taskId, setTaskId] = useState<string | null>(null)
+  const [review, setReview] = useState<ReviewSurface | null>(null)
+  const [reviewSelection, setReviewSelection] = useState<Selection | null>(null)
+  const reviewOpener = useRef<HTMLButtonElement | null>(null)
   const [attempt, setAttempt] = useState(0)
   const commit = record?.phase === 'committed' ? record.id : null
   const seen = useRef(commit)
@@ -51,21 +57,30 @@ export function ManagerDashboardPage({ headingRef, view, onView, operations, onS
   let recovery: ReactNode = null
   if (record?.phase === 'uncertain' || record?.phase === 'rejected') {
     const handledInDrawer = taskId && record.command.operation === 'LM_TASK_COMMENT' && 'taskId' in record.command && record.command.taskId === taskId
-    if (!handledInDrawer) recovery = <ChangeRecovery operations={operations} onSessionInvalid={onSessionInvalid} onReload={refresh} focusRef={headingRef} />
+    if (!handledInDrawer && !review) recovery = <ChangeRecovery operations={operations} onSessionInvalid={onSessionInvalid} onReload={refresh} focusRef={headingRef} />
   }
   const saved = record?.phase === 'committed' ? (record.result.operation === 'LM_TASK_COMMENT' ? 'Comment posted.'
-    : record.result.operation === 'LM_REMIND' ? record.result.alreadyReminded ? 'This employee was already reminded today.' : 'Reminder sent.' : '') : ''
+    : record.result.operation === 'LM_REMIND' ? record.result.alreadyReminded ? 'This employee was already reminded today.' : 'Reminder sent.'
+    : record.result.operation === 'LM_DECLINE' ? 'Decline sent.' : 'items' in record.result ? 'Approval saved.' : '') : ''
   return <>
     {recovery}
     <ManagerDashboard headingRef={headingRef} anchor={anchor} currentWeek={current} asOf={data?.asOf ?? ''} range={range} rangeWeeks={rangeWeeks}
       read={state} readId={`${params}:${attempt}:${read.loading}`} onWeek={(week) => onView({ anchor: week, selection: { kind: 'week', week }, pages: {} })}
       onRange={(value) => onView({ anchor, selection: value ?? (anchor ? { kind: 'week', week: anchor } : null), pages: {} })}
       onPage={(section, page) => onView({ ...view, pages: { ...view.pages, [section]: page } })}
-      onRetry={refresh} onReloadLatest={refresh} onApprovals={onApprovals} onComment={(task) => setTaskId(task.id)}
+      onRetry={refresh} onReloadLatest={refresh} onApprovals={(group, opener) => {
+        if (!group) { onApprovals(); return }
+        if (!data) return
+        reviewOpener.current = opener ?? null
+        setReviewSelection(data.selection)
+        setReview({ kind: 'group', personId: group.employeeId, page: 1 })
+      }} onComment={(task) => setTaskId(task.id)}
       writesPaused={!!record && record.phase !== 'committed'}
       reminderBusy={(person) => record?.phase === 'pending' && record.command.operation === 'LM_REMIND' && record.command.employeeId === person.employeeId && record.command.week === person.week}
       onRemind={(person) => void operations.send({ operation: 'LM_REMIND', employeeId: person.employeeId, week: person.week }, onSessionInvalid)} />
     {taskId && <TeamTaskDrawer key={taskId} id={taskId} headingRef={headingRef} onClose={() => setTaskId(null)} operations={operations} onSessionInvalid={onSessionInvalid} commit={commit} />}
+    {review && <ReviewOverlay surface={review} onSurface={setReview} selection={reviewSelection}
+      headingRef={headingRef} returnFocusRef={reviewOpener} operations={operations} onSessionInvalid={onSessionInvalid} />}
     {commit && saved && !(taskId && record?.command.operation === 'LM_TASK_COMMENT' && 'taskId' in record.command && record.command.taskId === taskId) &&
       <NoticeToast key={commit} id={`manager-committed:${commit}`} message={saved} />}
   </>

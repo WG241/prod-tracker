@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient, WorkWeek } from '../../src/generated/prisma/client.ts'
+import { Prisma } from '../../src/generated/prisma/client.ts'
+import type { PrismaClient, WorkWeek } from '../../src/generated/prisma/client.ts'
 import type { SessionContext } from '../../src/features/auth/contracts.ts'
 import type { HistoryAvailability, HistoryResponse, HistoryStatus } from '../../src/features/employee/history-contracts.ts'
 import { taskStatuses } from '../../src/features/employee/contracts.ts'
@@ -20,6 +21,48 @@ export function historyQuery(url: string) {
   if (!/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page))) invalid()
   return { week, status: status as HistoryStatus | null, from, to, page: Number(page) }
 }
+
+type HistoryQuery = ReturnType<typeof historyQuery>
+
+async function historyPage(tx: Prisma.TransactionClient, userId: string, available: Map<string, SnapshotContext>, query: HistoryQuery): Promise<HistoryResponse['records']> {
+  const owners = JSON.stringify(Object.fromEntries([...available].map(([id, context]) => [id, context.displayName])))
+  const source = Prisma.sql`
+    WITH records AS (
+      SELECT saved.id, saved.title, t.status::text AS status, saved."startsOn", saved."endsOn",
+             w."startsOn" AS week, saved."ownerName", saved."createdAt"
+      FROM "HistoryTaskSnapshot" saved
+      JOIN "HistoryWeekSnapshot" w ON w.id = saved."historyWeekId"
+      JOIN "HistoryPersonSnapshot" person ON person."historyWeekId" = w.id AND person."userId" = saved."ownerId"
+      JOIN "WeeklyTask" t ON t.id = saved.id AND t."ownerId" = saved."ownerId"
+      JOIN "WeeklyTracker" tracker ON tracker.id = t."trackerId" AND tracker."userId" = saved."ownerId"
+      WHERE saved."ownerId" = ${userId} AND t."deletedAt" IS NULL
+      UNION ALL
+      SELECT t.id, t.title, t.status::text, t."startsOn", t."endsOn", w."startsOn", owner.value, t."createdAt"
+      FROM jsonb_each_text(${owners}::jsonb) owner
+      JOIN "WeeklyTracker" tracker ON tracker.id = owner.key AND tracker."userId" = ${userId}
+      JOIN "WorkWeek" w ON w.id = tracker."weekId"
+      JOIN "WeeklyTask" t ON t."trackerId" = tracker.id AND t."ownerId" = tracker."userId"
+      WHERE t."deletedAt" IS NULL
+    )
+  `
+  const filters = Prisma.sql`
+    WHERE TRUE
+    ${query.week ? Prisma.sql`AND week = ${query.week}::date` : Prisma.empty}
+    ${query.status ? Prisma.sql`AND status = ${query.status}` : Prisma.empty}
+    ${query.from && query.to ? Prisma.sql`AND "startsOn" <= ${query.to}::date AND "endsOn" >= ${query.from}::date` : Prisma.empty}
+  `
+  const [count] = await tx.$queryRaw<{ total: bigint }[]>`${source} SELECT count(*) AS total FROM records ${filters}`
+  const total = Number(count.total), skip = pageOffset(query.page, total)
+  const rows = skip === null || !total ? [] : await tx.$queryRaw<{
+    id: string; title: string; status: HistoryStatus; startsOn: Date; endsOn: Date; week: Date; ownerName: string
+  }[]>`
+    ${source} SELECT id, title, status, "startsOn", "endsOn", week, "ownerName" FROM records ${filters}
+    ORDER BY week DESC, "startsOn", "createdAt", id LIMIT 25 OFFSET ${skip}
+  `
+  return { items: rows.map((row) => ({ ...row, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn), week: isoDay(row.week) })),
+    total, page: query.page, pageSize: 25 }
+}
+
 export async function readHistory(db: PrismaClient, context: SessionContext, query: ReturnType<typeof historyQuery>, at: Date): Promise<HistoryResponse> {
   return db.$transaction(async (tx) => {
     await employeePrincipal(tx, context, at)
@@ -39,16 +82,8 @@ export async function readHistory(db: PrismaClient, context: SessionContext, que
         byDate.set(key, { id: `missing:${key}`, startsOn: date, freezesAt, virtual: true, schedule })
       }
     }
-    const snapshotWeeks = await tx.historyWeekSnapshot.findMany({ where: { persons: { some: { userId } } }, select: { id: true, startsOn: true, freezesAt: true } })
-    const snapshotWeekIds = snapshotWeeks.map((row) => row.id)
-    const snapshotWeekStarts = snapshotWeeks.map((row) => row.startsOn)
-    const snapshotByDate = new Map(snapshotWeeks.map((row) => [isoDay(row.startsOn), row]))
-    const snapshotTasks = snapshotWeekIds.length ? await tx.historyTaskSnapshot.findMany({ where: { historyWeekId: { in: snapshotWeekIds }, ownerId: userId, ...(query.week ? { historyWeek: { startsOn: day(query.week) } } : {}),
-      ...(query.from && query.to ? { startsOn: { lte: day(query.to) }, endsOn: { gte: day(query.from) } } : {}) }, include: { historyWeek: { select: { startsOn: true } } } }) : []
-    const canonical = snapshotTasks.length ? await tx.weeklyTask.findMany({ where: { id: { in: snapshotTasks.map(({ id }) => id) },
-      ownerId: userId, tracker: { userId }, deletedAt: null, ...(query.status ? { status: query.status } : {}) }, select: { id: true, status: true } }) : []
-    const liveStatus = new Map(canonical.map(({ id, status }) => [id, status]))
-    const snapshotTaskWeeks = new Set(snapshotTasks.map((row) => isoDay(row.historyWeek.startsOn)))
+    const snapshotWeeks = await tx.historyWeekSnapshot.findMany({ where: { persons: { some: { userId } } }, select: { startsOn: true } })
+    const snapshotByDate = new Set(snapshotWeeks.map((row) => isoDay(row.startsOn)))
     const taskWindows = await tx.$queryRaw<{ trackerId: string; matches: boolean }[]>`
       SELECT t."trackerId",bool_or(${query.from === null} OR (t."startsOn"<=${query.to ? day(query.to) : at}::date AND t."endsOn">=${query.from ? day(query.from) : at}::date)) AS matches
       FROM "WeeklyTask" t JOIN "WeeklyTracker" r ON r.id=t."trackerId"
@@ -71,25 +106,11 @@ export async function readHistory(db: PrismaClient, context: SessionContext, que
       candidates.push({ week: key, startsOn: week.startsOn, state, trackerId: tracker?.id ?? null })
       if (state === 'AVAILABLE' && tracker && evidence.context) available.set(tracker.id, evidence.context)
     }
-    const legacyWeek = query.week ? { startsOn: day(query.week) } : snapshotWeekStarts.length ? { startsOn: { notIn: snapshotWeekStarts } } : undefined
-    const where: Prisma.WeeklyTaskWhereInput = { ownerId: userId, deletedAt: null, trackerId: { in: [...available.keys()] }, tracker: { userId, ...(legacyWeek ? { week: legacyWeek } : {}) },
-      ...(query.status ? { status: query.status } : {}), ...(query.from && query.to ? { startsOn: { lte: day(query.to) }, endsOn: { gte: day(query.from) } } : {}) }
-    const rows = await tx.weeklyTask.findMany({ where, orderBy: [{ tracker: { week: { startsOn: 'desc' } } }, { startsOn: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, trackerId: true, title: true, status: true, startsOn: true, endsOn: true, createdAt: true, tracker: { select: { week: { select: { startsOn: true } } } } } })
-    const records = [
-      ...snapshotTasks.flatMap((row) => {
-        const status = liveStatus.get(row.id)
-        return status ? [{ id: row.id, title: row.title, status, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn),
-          week: isoDay(row.historyWeek.startsOn), ownerName: row.ownerName, createdAt: row.createdAt }] : []
-      }),
-      ...rows.map((row) => ({ id: row.id, title: row.title, status: row.status, startsOn: isoDay(row.startsOn), endsOn: isoDay(row.endsOn), week: isoDay(row.tracker.week.startsOn), ownerName: available.get(row.trackerId)!.displayName, createdAt: row.createdAt })),
-    ].sort((a, b) => b.week.localeCompare(a.week) || a.startsOn.localeCompare(b.startsOn) || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
-    const total = records.length, skip = pageOffset(query.page, total)
-    const page = skip === null ? [] : records.slice(skip, skip + 25)
+    const records = await historyPage(tx, userId, available, query)
     let pendingWeeks = 0, repairWeeks = 0
     for (const candidate of candidates) {
       if (query.week && candidate.week !== query.week) continue
-      if (query.from && query.to && !(candidate.week <= query.to && isoDay(shiftDay(candidate.startsOn, 4)) >= query.from) && !snapshotTaskWeeks.has(candidate.week) && !(candidate.trackerId && windows.get(candidate.trackerId))) continue
+      if (query.from && query.to && !(candidate.week <= query.to && isoDay(shiftDay(candidate.startsOn, 4)) >= query.from) && !(candidate.trackerId && windows.get(candidate.trackerId))) continue
       if (candidate.state === 'PENDING') pendingWeeks++
       if (candidate.state === 'REPAIR_REQUIRED') repairWeeks++
     }
@@ -101,7 +122,7 @@ export async function readHistory(db: PrismaClient, context: SessionContext, que
     for (const week of weeks) if (week.freezesAt > at && week.freezesAt < next) next = week.freezesAt
     return { asOf: at.toISOString(), timezone: 'Africa/Lagos', currentWeekStart: isoDay(monday(at)), nextChangeAt: next.toISOString(),
       selection: { week: query.week, status: query.status, range: query.from && query.to ? { from: query.from, to: query.to } : null, page: query.page },
-      records: { items: page.map(({ createdAt: _createdAt, ...row }) => row), total, page: query.page, pageSize: 25 },
+      records,
       weeks: candidates.toSorted((a, b) => b.week.localeCompare(a.week)).map(({ week, state }) => ({ week, state })), availability: { pendingWeeks, repairWeeks, captureInitialized: !!proof.settings?.trackingStartsOn }, selectedWeekState }
   }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 15000 })
 }

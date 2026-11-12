@@ -85,9 +85,15 @@ export function readReliefCandidates(db: PrismaClient, actor: Actor, url: string
   return db.$transaction(async (tx) => {
     const { userId, at } = await managerPrincipal(tx, actor)
     if (start < watCalendarDay(at)) throw new EmployeeFailure('INVALID_INPUT', 400)
-    const rows = await tx.user.findMany({ where: { id: { not: userId }, accountStatus: 'ACTIVE',
-      assignments: { some: { ...effective(at), role: 'LINE_MANAGER' } } }, select: officerSelect(at, start, end) })
     const needle = search.trim().toLowerCase()
+    const role = { ...effective(at), role: 'LINE_MANAGER' as const }
+    const contains = { contains: needle.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' as const }
+    const rows = await tx.user.findMany({ where: { id: { not: userId }, accountStatus: 'ACTIVE',
+      assignments: { some: role },
+      ...(needle && /^[\x20-\x7e]+$/.test(needle) && !'staff member'.includes(needle) ? { OR: [
+        { name: contains }, { assignments: { some: { ...role, business: { name: contains } } } },
+      ] } : {}),
+    }, select: officerSelect(at, start, end) })
     const candidates = rows.flatMap((row) => {
       const officer = eligibleOfficer(row, userId, at, start, end)
       return officer && [officer.name, officer.business].some((label) => label.toLowerCase().includes(needle))

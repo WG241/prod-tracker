@@ -1,4 +1,5 @@
-import type { PrismaClient } from '../../src/generated/prisma/client.ts'
+import { Prisma } from '../../src/generated/prisma/client.ts'
+import type { DecisionKind, PrismaClient } from '../../src/generated/prisma/client.ts'
 import type { BlockerRow, ReviewAttempt, ReviewDetail, ReviewList, ReviewPeople, ReviewPerson, ReviewRow, ReviewSummary } from '../../src/features/line-manager/approvals-contracts.ts'
 import { approvalTabs } from '../../src/features/line-manager/approvals-contracts.ts'
 import type { ApprovalTab } from '../../src/features/line-manager/approvals-contracts.ts'
@@ -7,11 +8,12 @@ import { isoDay, shiftDay } from '../data-model/calendar.ts'
 import { EmployeeFailure, monday } from '../employee/calendar.ts'
 import { pageOffset } from '../employee/reads.ts'
 import { taskIdentity } from '../employee/task-validation.ts'
+import { decisionCounts, decisionPage, decisionPeople, decisionScope, decisionWeeks } from './approval-history.ts'
 import { page, period, selectors } from './query.ts'
 import { clock, readBounds, slice } from './reads.ts'
 import { roster, scopedTasks } from './reporting.ts'
-import { groupPending, pendingReviews } from './review-queue.ts'
-import { exactReview, pendingAuthority, reviewInclude, reviewerScope, submittedWork } from './review-scope.ts'
+import { groupPending, pendingCounts, pendingReviews } from './review-queue.ts'
+import { decisionReadiness, exactReview, pendingAuthority, reviewInclude, reviewerScope, submittedWork } from './review-scope.ts'
 import type { ReviewSource } from './review-scope.ts'
 import { managerPrincipal } from './scope.ts'
 import type { Tx } from './scope.ts'
@@ -58,93 +60,161 @@ async function note(tx: Tx, row: ReviewSource) {
   return found ? { body: found.body, createdAt: found.createdAt.toISOString() } : null
 }
 
-async function listData(tx: Tx, actor: Actor, url: string, people: boolean) {
-  const { principal, scope, settings } = await setup(tx, actor)
-  const { at } = principal
-  const query = selection(url, at, people ? 'people' : 'list')
-  const current = monday(at), currentDay = isoDay(current)
+async function pageNotes(tx: Tx, ids: string[]) {
+  if (!ids.length) return new Map<string, ReviewAttempt['note']>()
+  const notes = await tx.$queryRaw<{ id: string; body: string; createdAt: Date }[]>`
+    SELECT r.id, latest.body, latest."createdAt" FROM "ApprovalRequest" r
+    CROSS JOIN LATERAL (
+      SELECT c.body, c."createdAt" FROM "TaskComment" c
+      WHERE c."weeklyTaskId" = r."weeklyTaskId" AND c."authorId" = r."submittedById" AND c."createdAt" <= r."submittedAt"
+      ORDER BY c."createdAt" DESC, c.id DESC LIMIT 1
+    ) latest WHERE r.id IN (${Prisma.join(ids)})
+  `
+  return new Map(notes.map(({ id, body, createdAt }) => [id, { body, createdAt: createdAt.toISOString() }]))
+}
+
+type Query = ReturnType<typeof selection>
+type Setup = Awaited<ReturnType<typeof setup>>
+
+const includesWeek = (query: Query, week: string) => !query.included || query.included.has(week)
+const historyKind = (tab: ApprovalTab): DecisionKind | null => tab === 'APPROVED' ? 'APPROVE' : tab === 'DECLINED' ? 'DECLINE' : null
+
+async function pendingList(tx: Tx, { principal: { at }, scope, settings }: Setup, query: Query) {
   const pending = await pendingReviews(tx, scope)
-  const selected = (week: string) => !query.included || query.included.has(week)
-  const selectedPending = pending.filter(({ row, week }) => selected(week) && (!query.personId || row.submittedById === query.personId))
-  const { groups, routingUnavailableCount } = groupPending(selectedPending, at, settings.overdueApprovalDays)
-  const dates = (await tx.workWeek.findMany({ where: { startsOn: { lte: current } }, orderBy: { startsOn: 'asc' }, select: { startsOn: true } }))
-    .map(({ startsOn }) => startsOn).filter((date) => selected(isoDay(date)))
-  if (selected(currentDay) && !dates.some((date) => isoDay(date) === currentDay)) dates.push(current)
-  const weeks = await roster(tx, dates, current, principal, settings)
-  const { deletedAt: _deletedAt, ...scoped } = scopedTasks([...weeks.values()])
-  const tasks = query.personId ? { AND: [scoped, { ownerId: query.personId }] } : scoped
-  const decided = await tx.approvalRequest.findMany({ where: {
-    state: 'DECIDED', decision: { method: 'HUMAN', decidedAt: { lte: at } }, task: tasks,
-  }, include: reviewInclude(at), orderBy: [{ decision: { decidedAt: 'desc' } }, { decision: { id: 'desc' } }] })
-  const approved: ReviewRow[] = [], declined: ReviewRow[] = []
-  for (const row of decided) {
-    const submitted = submittedWork(row), outcome = decision(row)
-    if (!submitted || !outcome) continue
-    const member = weeks.get(submitted.week)?.members.get(submitted.ownerId)
-    if (!member) continue
-    const result = { ...attempt(row, submitted, member.unitName), decision: outcome }
-    if (outcome.kind === 'APPROVE') approved.push(result)
-    else declined.push(result)
-  }
-  const currentWeek = weeks.get(currentDay)
-  const blockerScope = scopedTasks(currentWeek?.kind === 'CURRENT' ? [currentWeek] : [])
-  const blockerTasks = await tx.weeklyTask.findMany({ where: { AND: [blockerScope, { status: 'BLOCKED', ownerId: query.personId ?? undefined }] },
-    orderBy: [{ startsOn: 'asc' }, { id: 'asc' }] })
-  const blockers: BlockerRow[] = blockerTasks.flatMap((task) => {
-    const member = currentWeek?.members.get(task.ownerId)
-    return member ? [{ taskId: task.id, ownerId: task.ownerId, ownerName: member.name, unit: member.unitName, title: task.title,
-      activity: task.activity, startsOn: isoDay(task.startsOn), reason: task.blockerReason ?? '', carried: task.carryRequested || !!task.carriedFromId }] : []
-  })
+  const selectedPending = pending.filter(({ row, week }) => includesWeek(query, week) && (!query.personId || row.submittedById === query.personId))
   const pendingWeeks = pending.filter(({ authority }) => authority.state === 'ALLOWED').map(({ week }) => week)
-  const transitions = [...scope.transitions, ...selectedPending.map(({ row }) => shiftDay(row.submittedAt, Math.floor((at.getTime() - row.submittedAt.getTime()) / 86400000) + 1))]
-  if (currentWeek?.freezesAt) transitions.push(currentWeek.freezesAt)
-  return { query, groups, approved, declined, blockers, routingUnavailableCount, pendingWeeks, scope,
-    clock: clock(at, actor.context.session.expiresAt, transitions) }
+  const transitions = selectedPending.map(({ row }) => shiftDay(row.submittedAt, Math.floor((at.getTime() - row.submittedAt.getTime()) / 86400000) + 1))
+  return { ...groupPending(selectedPending, at, settings.overdueApprovalDays), pendingWeeks, transitions }
+}
+
+async function liveWeek(tx: Tx, { principal, settings }: Setup, query: Query, current: Date) {
+  const currentDay = isoDay(current)
+  if (!includesWeek(query, currentDay)) return undefined
+  // A frozen current week is covered by recorded decision membership.
+  const stored = await tx.workWeek.findUnique({ where: { startsOn: current }, select: { freezesAt: true } })
+  if (stored && stored.freezesAt <= principal.at) return undefined
+  const weeks = await roster(tx, [current], current, principal, settings, { personId: query.personId ?? undefined })
+  const week = weeks.get(currentDay)
+  return week?.kind === 'CURRENT' ? week : undefined
+}
+
+type LiveWeek = Awaited<ReturnType<typeof liveWeek>>
+
+function blockerWhere(week: LiveWeek) {
+  return { ...scopedTasks(week ? [week] : []), status: 'BLOCKED' as const }
+}
+
+function historyScope({ principal }: Setup, query: Query, current: Date, week: LiveWeek) {
+  return decisionScope({ managerId: principal.userId, at: principal.at, current, included: query.included,
+    personId: query.personId, currentMembers: week?.members.values() ?? [] })
+}
+
+async function decidedRows(tx: Tx, scope: ReturnType<typeof decisionScope>, kind: DecisionKind, page: number, total: number, at: Date) {
+  const ids = await decisionPage(tx, scope, kind, page, total)
+  if (!ids.length) return []
+  const rows = await tx.approvalRequest.findMany({ where: { id: { in: ids.map(({ requestId }) => requestId) } }, include: reviewInclude(at) })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  return ids.flatMap(({ requestId, unit }): ReviewRow[] => {
+    const row = byId.get(requestId)
+    if (!row) return []
+    const submitted = submittedWork(row), outcome = decision(row)
+    return submitted && outcome ? [{ ...attempt(row, submitted, unit), decision: outcome }] : []
+  })
+}
+
+async function blockerRows(tx: Tx, week: LiveWeek, page: number, total: number) {
+  const skip = pageOffset(page, total)
+  if (!week || skip === null || !total) return []
+  const tasks = await tx.weeklyTask.findMany({ where: blockerWhere(week), skip, take: 25, orderBy: [{ startsOn: 'asc' }, { id: 'asc' }] })
+  return tasks.map((task): BlockerRow => {
+    const member = week.members.get(task.ownerId)!
+    return { taskId: task.id, ownerId: task.ownerId, ownerName: member.name, unit: member.unitName, title: task.title,
+      activity: task.activity, startsOn: isoDay(task.startsOn), reason: task.blockerReason ?? '', carried: task.carryRequested || !!task.carriedFromId }
+  })
 }
 
 export async function readApprovals(db: PrismaClient, actor: Actor, url: string): Promise<ReviewList> {
   return db.$transaction(async (tx) => {
-    const data = await listData(tx, actor, url, false)
-    const { query, groups, approved, declined, blockers, routingUnavailableCount } = data
-    return { ...data.clock, selection: query.selection, weeks: [...new Set(data.pendingWeeks)].sort().reverse(), routingUnavailableCount,
-      workPaused: data.scope.paused, counts: { AWAITING: groups.length, APPROVED: approved.length, DECLINED: declined.length, BLOCKERS: blockers.length },
-      groups: slice(groups, query.page), decisions: slice(query.tab === 'DECLINED' ? declined : approved, query.page), blockers: slice(blockers, query.page) }
+    const context = await setup(tx, actor)
+    const { principal: { at }, scope } = context
+    const query = selection(url, at, 'list')
+    const current = monday(at)
+    const { groups, pendingWeeks, routingUnavailableCount, transitions } = await pendingList(tx, context, query)
+    const kind = historyKind(query.tab)
+    const unfiltered = { ...query, included: null }
+    const live = await liveWeek(tx, context, kind ? unfiltered : query, current)
+    const week = includesWeek(query, isoDay(current)) ? live : undefined
+    const history = historyScope(context, query, current, week)
+    const decided = await decisionCounts(tx, history)
+    const blockerTotal = week?.members.size ? await tx.weeklyTask.count({ where: blockerWhere(week) }) : 0
+    const weeks = kind ? await decisionWeeks(tx, historyScope(context, unfiltered, current, live), kind)
+      : query.tab === 'BLOCKERS' ? [isoDay(current)] : [...new Set(pendingWeeks)].sort().reverse()
+    const decisionTotal = decided[query.tab === 'DECLINED' ? 'DECLINED' : 'APPROVED']
+    const decisions = kind ? await decidedRows(tx, history, kind, query.page, decisionTotal, at) : []
+    const blockers = query.tab === 'BLOCKERS' ? await blockerRows(tx, week, query.page, blockerTotal) : []
+    return { ...clock(at, actor.context.session.expiresAt, [...scope.transitions, ...transitions, ...(week?.freezesAt ? [week.freezesAt] : [])]),
+      selection: query.selection, weeks, routingUnavailableCount, workPaused: scope.paused,
+      counts: { AWAITING: groups.length, ...decided, BLOCKERS: blockerTotal }, groups: slice(groups, query.page),
+      decisions: { items: decisions, page: query.page, pageSize: 25, total: decisionTotal },
+      blockers: { items: blockers, page: query.page, pageSize: 25, total: blockerTotal } }
   }, readBounds)
 }
 
 export async function readApprovalPeople(db: PrismaClient, actor: Actor, url: string): Promise<ReviewPeople> {
   return db.$transaction(async (tx) => {
-    const { query, groups, approved, declined, blockers, clock: timestamp } = await listData(tx, actor, url, true)
-    const rows = query.tab === 'AWAITING' ? groups.map((row) => ({ id: row.employeeId, label: row.employeeName, unit: row.unitName }))
-      : (query.tab === 'APPROVED' ? approved : query.tab === 'DECLINED' ? declined : blockers)
-        .map((row) => ({ id: row.ownerId, label: row.ownerName, unit: row.unit }))
+    const context = await setup(tx, actor)
+    const { principal: { at }, scope } = context
+    const query = selection(url, at, 'people')
+    let rows: ReviewPeople['people']['items']
+    const transitions = [...scope.transitions]
+    if (query.tab === 'AWAITING') {
+      const pending = await pendingList(tx, context, query)
+      rows = pending.groups.map((row) => ({ id: row.employeeId, label: row.employeeName, unit: row.unitName }))
+    } else {
+      const current = monday(at)
+      const week = await liveWeek(tx, context, query, current)
+      if (week?.freezesAt) transitions.push(week.freezesAt)
+      const kind = historyKind(query.tab)
+      if (kind) rows = await decisionPeople(tx, historyScope(context, query, current, week), kind)
+      else if (week?.members.size) {
+        const owners = await tx.weeklyTask.groupBy({ by: ['ownerId'], where: blockerWhere(week) })
+        rows = owners.map(({ ownerId }) => {
+          const member = week.members.get(ownerId)!
+          return { id: ownerId, label: member.name, unit: member.unitName }
+        })
+      } else rows = []
+    }
     const people = new Map<string, typeof rows[number]>()
     for (const row of rows) {
       if (!people.has(row.id) && [row.label, row.unit].some((value) => value.toLowerCase().includes(query.search))) people.set(row.id, row)
     }
-    return { ...timestamp, people: slice([...people.values()].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)), query.page) }
+    return { ...clock(at, actor.context.session.expiresAt, transitions),
+      people: slice([...people.values()].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)), query.page) }
   }, readBounds)
 }
 
 export async function reviewSummary(tx: Tx, actor: Actor): Promise<ReviewSummary> {
-  const { principal, scope, settings } = await setup(tx, actor)
-  const pending = await pendingReviews(tx, scope)
-  const { groups, routingUnavailableCount } = groupPending(pending, principal.at, settings.overdueApprovalDays)
-  return { ...clock(principal.at, actor.context.session.expiresAt, scope.transitions), employeeCount: groups.length,
-    requestCount: groups.reduce((count, row) => count + row.taskCount, 0), routingUnavailableCount, workPaused: scope.paused }
+  const principal = await managerPrincipal(tx, actor)
+  const scope = await reviewerScope(tx, principal.userId, principal.at)
+  return { ...clock(principal.at, actor.context.session.expiresAt, scope.transitions), ...await pendingCounts(tx, scope), workPaused: scope.paused }
 }
 
 export async function readReviewPerson(db: PrismaClient, actor: Actor, url: string, personId: string): Promise<ReviewPerson> {
   return db.$transaction(async (tx) => {
     const { scope, principal } = await setup(tx, actor)
     const query = selection(url, principal.at, 'review')
-    const all = (await pendingReviews(tx, scope)).filter(({ row, authority, week }) => row.submittedById === personId && authority.state === 'ALLOWED'
-      && (!query.included || query.included.has(week)))
+    const all = (await pendingReviews(tx, scope, { personId, weeks: query.included })).filter(({ authority }) => authority.state === 'ALLOWED')
     if (!all.length) throw notFound()
     const selected = slice(all, query.page)
     const items: ReviewAttempt[] = []
+    const rows = selected.items.map(({ row }) => row)
+    const ready = await decisionReadiness(tx, rows, principal.at)
+    const notes = await pageNotes(tx, rows.map(({ id }) => id))
     for (const { row, authority } of selected.items) {
-      if (authority.state === 'ALLOWED') items.push(attempt(row, authority.submitted, authority.employee.unit?.name ?? '', await note(tx, row)))
+      if (authority.state === 'ALLOWED') items.push({
+        ...attempt(row, authority.submitted, authority.employee.unit?.name ?? '', notes.get(row.id)),
+        ...(!ready.has(row.id) ? { decisionUnavailable: 'HISTORY_UNAVAILABLE' as const } : {}),
+      })
     }
     return { ...clock(principal.at, actor.context.session.expiresAt, scope.transitions), person: { id: personId, label: all[0].row.submitter.name?.trim() || 'Staff member' },
       requests: { ...selected, items }, workPaused: scope.paused }
@@ -184,11 +254,13 @@ export async function readReviewDetail(db: PrismaClient, actor: Actor, id: strin
       : (await tx.taskComment.findMany({ where, skip, take: 25, orderBy, include: { author: { select: { name: true } } } })).map((item) => ({
         id: item.id, author: item.author.name?.trim() || 'Staff member', body: item.body, createdAt: item.createdAt.toISOString(),
       }))
+    const ready = pending.state === 'ALLOWED' && (await decisionReadiness(tx, [row], at)).has(row.id)
     return { ...clock(at, actor.context.session.expiresAt, [...scope.transitions, week.freezesAt]), frozen,
-      attempt: attempt(row, submitted, pending.state === 'ALLOWED' ? pending.employee.unit?.name ?? '' : member!.unitName, await note(tx, row)),
+      attempt: { ...attempt(row, submitted, pending.state === 'ALLOWED' ? pending.employee.unit?.name ?? '' : member!.unitName, await note(tx, row)),
+        ...(pending.state === 'ALLOWED' && !ready ? { decisionUnavailable: 'HISTORY_UNAVAILABLE' as const } : {}) },
       mode: pending.state !== 'ALLOWED' ? 'HISTORY' : pending.route.reliefId ? 'RELIEF' : 'PERMANENT',
       coveredManager: pending.state === 'ALLOWED' ? pending.route.managerName : member!.managerName,
-      decision: outcome, workPaused: scope.paused, canDecide: pending.state === 'ALLOWED' && !scope.paused,
+      decision: outcome, workPaused: scope.paused, canDecide: ready && !scope.paused,
       canComment: (pending.state === 'ALLOWED' || !!member) && !row.task.deletedAt && !row.task.tracker.snapshotAt && !scope.paused
         && !frozen && isoDay(week.startsOn) === isoDay(monday(at)),
       comments: { items, total, page: commentPage, pageSize: 25 } }

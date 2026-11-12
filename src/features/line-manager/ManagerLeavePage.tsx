@@ -30,6 +30,7 @@ type FormProps = {
 }
 function CoverForm({ draft, onDraft, onSubmit, cover, earliest, latest, locked, pending, serverError, onCancel, onSessionInvalid }: FormProps) {
   const [search, setSearch] = useState('')
+  const [candidateSearch, setCandidateSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedName, setSelectedName] = useState('')
   const start = useRef<HTMLInputElement>(null), end = useRef<HTMLInputElement>(null), officer = useRef<HTMLSelectElement>(null)
@@ -53,7 +54,15 @@ function CoverForm({ draft, onDraft, onSubmit, cover, earliest, latest, locked, 
     const { expectedReturnOn, ...errors } = serverError.fields
     form.reportErrors({ ...errors, ...(expectedReturnOn ? { endsOn: expectedReturnOn } : {}) })
   }, [serverError, form])
-  const params = new URLSearchParams({ startsOn: draft.startsOn, endsOn: draft.endsOn, search, page: String(page) })
+  useEffect(() => {
+    if (search === candidateSearch) return
+    const timer = window.setTimeout(() => {
+      setCandidateSearch(search)
+      setPage(1)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [search, candidateSearch])
+  const params = new URLSearchParams({ startsOn: draft.startsOn, endsOn: draft.endsOn, search: candidateSearch, page: String(page) })
   const eligibleDates = !Object.keys(dateErrors(draft.startsOn, draft.endsOn)).length
   const read = useEmployeeRead<ReliefCandidates>(eligibleDates ? `${managerLeaveEndpoint}/relief-candidates?${params}` : null, onSessionInvalid)
   const options = read.data?.candidates.items ?? []
@@ -75,7 +84,7 @@ function CoverForm({ draft, onDraft, onSubmit, cover, earliest, latest, locked, 
         required error={form.errors.endsOn} onChange={(event) => changeDate('endsOn', event.target.value)} />
     </div>
     <InputField label="Search relief officers" type="search" value={search} maxLength={120} placeholder="Search name or business…" readOnly={locked}
-      onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
+      onChange={(event) => setSearch(event.target.value)} />
     <SelectField ref={officer} id={cover ? 'cover-officer' : 'initial-officer'} label="Relief officer" value={draft.reliefManagerId} required
       disabled={locked} error={form.errors.reliefManagerId}
       description="Your colleague can review your team’s completions during these dates."

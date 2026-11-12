@@ -13,13 +13,14 @@ import { createAuthService } from '../../server/auth/service.ts'
 import { day, isoDay, shiftDay } from '../../server/data-model/calendar.ts'
 import { createDatabase, databaseClock } from '../../server/db.ts'
 import { mutateTask } from '../../server/employee/writes.ts'
+import { parseOperation } from '../../server/employee/task-validation.ts'
 import { historyQuery, readHistory } from '../../server/employee/history-reads.ts'
 import { readTaskDetail } from '../../server/employee/reads.ts'
 import { recipientRefusal, storedBasis } from '../../server/email/policy.ts'
 import { reroutePendingRequests } from '../../server/line-manager/approval-writes.ts'
 import { registerLineManager } from '../../server/line-manager/router.ts'
 import { markRead } from '../../server/notifications/writes.ts'
-import type { ReviewDetail, ReviewList, ReviewPerson, ReviewReceipt, ReviewSummary } from '../../src/features/line-manager/approvals-contracts.ts'
+import type { ReviewDetail, ReviewList, ReviewPeople, ReviewPerson, ReviewReceipt, ReviewSummary } from '../../src/features/line-manager/approvals-contracts.ts'
 import { managerFixtures } from '../helpers/manager-dashboard-fixtures.ts'
 import { frozenTeamFixture } from '../helpers/team-history-fixtures.ts'
 
@@ -100,6 +101,9 @@ test('reads scoped groups, exact submitted detail, blockers and immutable decide
   assert.equal(list.groups.items[0]?.employeeId, fixture.ownerId)
   assert.equal(list.counts.APPROVED, 1)
   assert.equal(list.counts.BLOCKERS, 1)
+  assert.deepEqual(list.decisions.items, [])
+  const awaitingPeople = await read<ReviewPeople>(`${root}/people`)
+  assert.deepEqual(awaitingPeople.people.items.map(({ id }) => id), [fixture.ownerId])
   const summary = await read<ReviewSummary>(root + '/summary')
   assert.deepEqual([summary.employeeCount, summary.requestCount], [1, 1])
   const selected = await read<ReviewPerson>(`${root}/people/${fixture.ownerId}/pending?week=${fixture.week}`)
@@ -113,6 +117,28 @@ test('reads scoped groups, exact submitted detail, blockers and immutable decide
   for (const query of ['tab=INVALID', 'page=1&page=2', 'actorId=other', `week=${fixture.week}&from=${fixture.week}&to=${fixture.week}`]) {
     assert.equal((await get(`${root}?${query}`)).status, 400)
   }
+})
+
+test('excludes malformed decision evidence from totals, pages and Employee options', async () => {
+  const task = await db.weeklyTask.findFirstOrThrow({ where: { ownerId: fixture.ownerId, title: 'Approved dashboard task' } })
+  const invalid = [
+    { activity: '😀'.repeat(3001), startsOn: isoDay(task.startsOn) },
+    { activity: task.activity, startsOn: '2001-02-29' },
+  ]
+  await db.$transaction(async (tx) => {
+    for (const [index, fields] of invalid.entries()) {
+      const request = await tx.approvalRequest.create({ data: { weeklyTaskId: task.id, submittedById: fixture.ownerId,
+        submissionAssignmentId: fixture.ownerAssignmentId, assignedManagerId: fixture.managerId, attemptNumber: index + 2, state: 'DECIDED',
+        submissionSnapshot: { version: 1, ownerId: fixture.ownerId, title: task.title, ownerDisplayName: 'Malformed Employee',
+          ...fields, endsOn: isoDay(task.endsOn), weekStartsOn: fixture.week, status: 'AWAITING_APPROVAL' } } })
+      await tx.approvalDecision.create({ data: { requestId: request.id, actorId: fixture.managerId, decision: 'APPROVE', method: 'HUMAN' } })
+    }
+  })
+  const list = await read<ReviewList>(`${root}?tab=APPROVED`)
+  assert.equal(list.decisions.total, 1)
+  assert.deepEqual(list.decisions.items.map(({ ownerName }) => ownerName), [fixture.ownerName])
+  const options = await read<ReviewPeople>(`${root}/people?tab=APPROVED&search=Malformed`)
+  assert.equal(options.people.total, 0)
 })
 
 test('concurrent decisions commit exactly once and replay the original actor receipt', async () => {
@@ -138,6 +164,30 @@ test('concurrent decisions commit exactly once and replay the original actor rec
   const opened = await markRead(db, await actor(employee), randomUUID(), { operation: 'NOTIFICATION_READ', notificationId: notice.id })
   assert.ok('target' in opened)
   assert.deepEqual(opened.target, { kind: 'OWN_TASK', taskId: outcome.request.task.id, week: fixture.week })
+})
+
+test('reviews and decides Employee submissions up to the activity limit', async () => {
+  const user = await actor(employee)
+  const task = await db.weeklyTask.findFirstOrThrow({ where: { ownerId: fixture.ownerId, status: 'IN_PROGRESS' } })
+  for (const [length, outcome] of [[4001, 'decline'], [6000, 'approve']] as const) {
+    const current = await db.weeklyTask.findUniqueOrThrow({ where: { id: task.id } })
+    const activity = length === 6000 ? '😀'.repeat(3000) : 'a'.repeat(length)
+    const edit = parseOperation('EDIT', current.id, { title: current.title, activity, startsOn: isoDay(current.startsOn),
+      endsOn: isoDay(current.endsOn), carryRequested: current.carryRequested }, `"${current.revision}"`)
+    const edited = await mutateTask(db, user.context, user.sessionId, randomUUID(), edit)
+    const submitted = await mutateTask(db, user.context, user.sessionId, randomUUID(),
+      { kind: 'STATUS', taskId: task.id, revision: edited.taskRevision, status: 'COMPLETED' })
+    assert.ok(submitted.approvalRequestId)
+    const url = exact(submitted.approvalRequestId)
+    const group = await read<ReviewPerson>(`${root}/people/${fixture.ownerId}/pending`)
+    assert.ok(group.requests.items.find(({ requestId }) => requestId === submitted.approvalRequestId)?.activity === activity)
+    assert.ok((await read<ReviewDetail>(url)).attempt.activity === activity)
+    const response = await post(`${url}/${outcome}`, { expectedTaskRevision: submitted.taskRevision,
+      ...(outcome === 'decline' ? { reason: 'Please add supporting evidence.' } : {}) })
+    assert.equal(response.status, 200, await response.text())
+    const history = await read<ReviewList>(`${root}?tab=${outcome === 'approve' ? 'APPROVED' : 'DECLINED'}`)
+    assert.ok(history.decisions.items.find(({ requestId }) => requestId === submitted.approvalRequestId)?.activity === activity)
+  }
 })
 
 test('rejects a stale batch atomically and approves only the supplied displayed attempts', async () => {
@@ -198,6 +248,18 @@ test('a full Review page approves 25 exact attempts and leaves the next page pen
   assert.equal(await db.approvalRequest.count({ where: { id: { in: second.requests.items.map(({ requestId }) => requestId) }, state: 'PENDING' } }), second.requests.items.length)
   const times = await db.approvalDecision.findMany({ where: { id: { in: result.items.map(({ decisionId }) => decisionId) } }, select: { decidedAt: true } })
   assert.equal(new Set(times.map(({ decidedAt }) => decidedAt.toISOString())).size, 1)
+
+  const filter = `${root}?tab=APPROVED&week=${fixture.week}&personId=${fixture.ownerId}`
+  const pageOne = await read<ReviewList>(filter)
+  const pageTwo = await read<ReviewList>(filter + '&page=2')
+  assert.deepEqual(pageOne.decisions.items.map(({ requestId }) => requestId), result.items
+    .toSorted((a, b) => b.decisionId.localeCompare(a.decisionId)).map(({ approvalRequestId }) => approvalRequestId))
+  assert.equal(pageOne.counts.APPROVED, pageOne.decisions.total)
+  assert.equal(pageTwo.decisions.total, pageOne.decisions.total)
+  assert.equal(pageTwo.decisions.items.length, pageOne.decisions.total - 25)
+  assert.deepEqual((await read<ReviewList>(filter + '&page=9007199254740991')).decisions.items, [])
+  const options = await read<ReviewPeople>(`${root}/people?tab=APPROVED&week=${fixture.week}&search=${fixture.prefix}`)
+  assert.deepEqual(options.people.items.map(({ id }) => id), [fixture.ownerId])
 })
 
 test('reroutes a frozen pending attempt and records a late decline without changing the archive', async () => {
@@ -222,6 +284,9 @@ test('reroutes a frozen pending attempt and records a late decline without chang
   assert.deepEqual(await db.historyTaskSnapshot.findUnique({ where: { id: frozen.taskId } }), old)
   assert.equal((await db.weeklyTask.findUniqueOrThrow({ where: { id: frozen.taskId } })).status, 'DECLINED')
   assert.equal((await read<ReviewList>(`${root}?tab=DECLINED&week=${frozen.week}`)).decisions.items[0]?.requestId, frozen.requestId)
+  assert.equal((await read<ReviewList>(`${root}?tab=DECLINED&week=${frozen.week}`, other)).decisions.total, 0)
+  const options = await read<ReviewPeople>(`${root}/people?tab=DECLINED&week=${frozen.week}`)
+  assert.deepEqual(options.people.items.map(({ id }) => id), [frozen.transfer.id])
   assert.equal((await get(exact(frozen.requestId), other)).status, 404)
   await assert.rejects(db.weeklyTask.update({ where: { id: frozen.taskId }, data: { title: 'Change frozen text' } }))
   await provision(db, config, frozen.transfer.id, fixture.password)

@@ -20,6 +20,7 @@ import type { ManagerOperations } from './manager-operations.ts'
 import { ChangeRecovery } from './TeamTaskDrawer.tsx'
 
 const missing = 'This review is no longer available.'
+const historyUnavailable = 'This task can be reviewed once its frozen week is available.'
 const item = (attempt: ReviewAttempt) => ({ requestId: attempt.requestId, expectedTaskRevision: attempt.revision })
 type Shared = { headingRef: RefObject<HTMLHeadingElement | null>; operations: ManagerOperations; onSessionInvalid: () => void; onClose: () => void }
 
@@ -39,8 +40,9 @@ function ReviewActions({ attempt, disabled, onDecline, onApprove }: {
   </>
 }
 
-export function ReviewGroupDialog({ personId, selection, headingRef, operations, onSessionInvalid, onClose, onDecline, onDetail, focusRequest, page, onPage }: Shared & {
+export function ReviewGroupDialog({ personId, selection, headingRef, returnFocusRef, operations, onSessionInvalid, onClose, onDecline, onDetail, focusRequest, page, onPage }: Shared & {
   personId: string; selection: Selection | null; onDecline: (attempt: ReviewAttempt) => void; onDetail: (attempt: ReviewAttempt) => void; focusRequest?: string
+  returnFocusRef?: RefObject<HTMLButtonElement | null>
   page: number; onPage: (page: number) => void
 }) {
   const focus = useRef<HTMLDivElement>(null)
@@ -61,10 +63,11 @@ export function ReviewGroupDialog({ personId, selection, headingRef, operations,
   const canWrite = !!data && !data.workPaused && !read.stale && !read.loading && !read.error && (!record || record.phase === 'committed')
   const send = (command: ReviewCommand) => { if (canWrite) void operations.send(command, onSessionInvalid) }
   const shown = data?.requests.items ?? []
+  const eligible = shown.filter((attempt) => !attempt.decisionUnavailable)
   return <Dialog open size="wide" title={data ? `Review · ${data.person.label}` : 'Review completions'} initialFocusRef={focus}
-    fallbackFocusRef={headingRef} onClose={onClose} footer={<><Button onClick={onClose}>Close</Button>
-      {!!shown.length && <Button variant="success" aria-disabled={!canWrite} busy={record?.phase === 'pending' && record.command.operation === 'LM_APPROVE_BATCH'}
-        onClick={() => send({ operation: 'LM_APPROVE_BATCH', items: shown.map(item) })}><Check aria-hidden="true" />Approve all ({shown.length})</Button>}</>}>
+    returnFocusRef={returnFocusRef} fallbackFocusRef={headingRef} onClose={onClose} footer={<><Button onClick={onClose}>Close</Button>
+      {!!eligible.length && <Button variant="success" aria-disabled={!canWrite} busy={record?.phase === 'pending' && record.command.operation === 'LM_APPROVE_BATCH'}
+        onClick={() => send({ operation: 'LM_APPROVE_BATCH', items: eligible.map(item) })}><Check aria-hidden="true" />Approve all ({eligible.length})</Button>}</>}>
     <div ref={focus} tabIndex={-1} role="region" aria-label="Submitted completions">
       <ChangeRecovery operations={operations} onSessionInvalid={onSessionInvalid} onReload={read.retry} focusRef={focus} />
       {commit && <AnnounceEvent event={{ id: `approval-saved:${commit}`, message: 'Decision saved.', intent: 'status' }} />}
@@ -80,7 +83,8 @@ export function ReviewGroupDialog({ personId, selection, headingRef, operations,
           <p>{attempt.activity}</p><small>{displayDate(attempt.startsOn, false)} to {displayDate(attempt.endsOn)}</small>
           {attempt.note && <div className="review-employee-note"><strong>Employee comment</strong><p>{attempt.note.body}</p><small>{displayTime(attempt.note.createdAt)}</small></div>}
           <div className="employee-actions">
-            <ReviewActions attempt={attempt} disabled={!canWrite} onApprove={send} onDecline={(row) => { if (canWrite) onDecline(row) }} />
+            {attempt.decisionUnavailable ? <p className="employee-read-message">{historyUnavailable}</p>
+              : <ReviewActions attempt={attempt} disabled={!canWrite} onApprove={send} onDecline={(row) => { if (canWrite) onDecline(row) }} />}
             <Button ref={focusRequest === attempt.requestId ? returnFocus : undefined} variant="ghost" size="small" disabled={read.stale || read.loading} onClick={() => onDetail(attempt)}>View task</Button>
           </div>
         </section>)}
@@ -135,6 +139,7 @@ export function ReviewDrawer({ id, expected, headingRef, operations, onSessionIn
         {detail.mode === 'RELIEF' && <p className="employee-banner employee-gray">Reviewing on behalf of {detail.coveredManager}.</p>}
         {detail.workPaused && <p className="employee-banner employee-gray">Your work actions are paused while you are on leave.</p>}
         {detail.frozen && <p className="employee-banner employee-gray">The captured task and conversation are read only.</p>}
+        {detail.attempt.decisionUnavailable && <p className="employee-banner employee-amber">{historyUnavailable}</p>}
         <dl className="employee-detail-meta"><div><dt>Owner</dt><dd>{detail.attempt.ownerName}</dd></div>
           <div><dt>Dates</dt><dd>{displayDate(detail.attempt.startsOn, false)} to {displayDate(detail.attempt.endsOn)}</dd></div></dl>
         <div className="employee-activity"><h4>Activity</h4><p>{detail.attempt.activity}</p></div>

@@ -1,9 +1,11 @@
 import { Prisma } from '../../src/generated/prisma/client.ts'
+import { wellFormed } from '../../src/features/auth/contracts.ts'
 import type { SubmittedWork } from '../../src/features/line-manager/approvals-contracts.ts'
 import { isoDay, watCalendarDay, watMidnight } from '../data-model/calendar.ts'
 import { parseDay } from '../employee/calendar.ts'
 import { currentLeave } from '../employee/leave-state.ts'
-import { readableMessage } from '../notifications/events.ts'
+import { snapshotContext } from '../employee/history-evidence.ts'
+import { taskTextLimits, validTaskText } from '../employee/task-validation.ts'
 import { effective } from './scope.ts'
 import type { Tx } from './scope.ts'
 
@@ -16,6 +18,25 @@ export function reviewInclude(at: Date) {
   } satisfies Prisma.ApprovalRequestInclude
 }
 export type ReviewSource = Prisma.ApprovalRequestGetPayload<{ include: ReturnType<typeof reviewInclude> }>
+
+export async function decisionReadiness(tx: Tx, rows: ReviewSource[], at: Date) {
+  const archived = rows.filter(({ task: { tracker: { week } } }) => week.freezesAt <= at && week.historySnapshot)
+  const archiveTasks = archived.length ? await tx.historyTaskSnapshot.findMany({ where: {
+    id: { in: archived.map(({ task }) => task.id) },
+  }, select: { id: true, ownerId: true, historyWeekId: true } }) : []
+  const byTask = new Map(archiveTasks.map((row) => [row.id, row]))
+  return new Set(rows.filter(({ task, submittedById }) => {
+    const { tracker } = task
+    const { week } = tracker
+    if (at < week.freezesAt) return true
+    const days = tracker.expectedWorkingDaysSnapshot
+    if (!tracker.snapshotAt || tracker.snapshotAt < week.freezesAt || !snapshotContext(tracker.contextSnapshot, submittedById)
+      || days === null || days < 0 || days > 5 || !Number.isInteger(days)) return false
+    if (!week.historySnapshot) return true
+    const saved = byTask.get(task.id)
+    return saved?.ownerId === submittedById && saved.historyWeekId === week.historySnapshot.id
+  }).map(({ id }) => id))
+}
 type Route = { managerId: string; businessId: string; managerName: string; reliefId: string | null }
 
 export async function reviewerScope(tx: Tx, actorId: string, at: Date) {
@@ -67,12 +88,15 @@ export async function reviewerScope(tx: Tx, actorId: string, at: Date) {
 }
 export type ReviewerScope = Awaited<ReturnType<typeof reviewerScope>>
 
+export const submittedOwnerNameLimit = 160
+
 export function submittedWork(row: ReviewSource): SubmittedWork | null {
   const value = row.submissionSnapshot
   if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== 1 || value.ownerId !== row.submittedById
     || row.task.ownerId !== row.submittedById || row.task.tracker.userId !== row.submittedById
-    || value.status !== 'AWAITING_APPROVAL' || typeof value.title !== 'string' || typeof value.activity !== 'string' || typeof value.ownerDisplayName !== 'string'
-    || !readableMessage(value.title, value.activity) || !readableMessage(value.ownerDisplayName, value.title)
+    || value.status !== 'AWAITING_APPROVAL' || !validTaskText(value.title, taskTextLimits.title) || !validTaskText(value.activity, taskTextLimits.activity)
+    || typeof value.ownerDisplayName !== 'string' || value.ownerDisplayName.length > submittedOwnerNameLimit * 2 || !value.ownerDisplayName.trim()
+    || value.ownerDisplayName.includes('\0') || !wellFormed(value.ownerDisplayName) || [...value.ownerDisplayName].length > submittedOwnerNameLimit
     || typeof value.startsOn !== 'string' || typeof value.endsOn !== 'string' || value.startsOn > value.endsOn
     || value.weekStartsOn !== isoDay(row.task.tracker.week.startsOn)) return null
   try { parseDay(value.startsOn); parseDay(value.endsOn) } catch { return null }

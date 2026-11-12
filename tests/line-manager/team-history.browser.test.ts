@@ -74,7 +74,7 @@ for (const [mode, port] of [['development', 3022], ['production', 3023]] as cons
       const reply = 'Confirm the current team history conversation.'
       await drawer.getByRole('textbox', { name: 'Reply' }).fill(reply)
       await drawer.getByRole('button', { name: 'Post reply' }).click()
-      await drawer.getByText(reply, { exact: true }).waitFor()
+      await drawer.getByRole('listitem').getByText(reply, { exact: true }).waitFor()
       assert.equal(await db.taskComment.count({ where: { weeklyTaskId: fixture.blockerId, body: reply, authorId: fixture.managerId } }), 1)
       await page.keyboard.press('Escape')
       assert.equal(await task.evaluate((node) => node === document.activeElement), true)

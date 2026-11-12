@@ -19,7 +19,7 @@ for (const [mode, port] of [['development', 3016], ['production', 3017]] as cons
     const db = createDatabase(target)
     const env = { ...process.env, DATABASE_URL: target, DATABASE_URL_UNPOOLED: target, HOST: '127.0.0.1', PORT: String(port),
       BETTER_AUTH_URL: base, TELEMETRY_MODE: 'off', EMAIL_MODE: 'off' }
-    const fixture = await managerFixtures(db, readAuthConfig(env))
+    const fixture = await managerFixtures(db, readAuthConfig(env), { olderPending: true })
     const output = `.local/verification/feature16/${mode}`
     await mkdir(output, { recursive: true })
     const app = spawn(process.execPath, mode === 'development' ? ['--import', 'tsx', 'server/index.ts', '--dev'] : ['dist-server/server/index.js'],
@@ -104,13 +104,20 @@ for (const [mode, port] of [['development', 3016], ['production', 3017]] as cons
       const approvalsTable = page.getByRole('region', { name: 'Employees awaiting approval' })
       assert.equal(await approvalsTable.getAttribute('tabindex'), '0')
       await page.screenshot({ path: `${output}/mobile.png`, fullPage: true })
-      await page.getByRole('button', { name: `Review work for ${fixture.ownerName}` }).click()
-      await page.getByRole('heading', { name: 'Approvals', exact: true }).waitFor()
-      const query = new URL(page.url()).searchParams
-      assert.equal(query.get('request'), fixture.requestId)
-      assert.equal(query.get('employee'), fixture.ownerId)
-      assert.equal(query.get('week'), fixture.week)
-      assert.equal(await page.getByText('This page is coming soon.').isVisible(), true)
+      const reviewOpener = page.getByRole('button', { name: `Review work for ${fixture.ownerName}` })
+      await reviewOpener.click()
+      const review = page.getByRole('dialog', { name: `Review · ${fixture.ownerName}` })
+      await review.getByRole('heading', { name: 'Work ready for review', exact: true }).waitFor()
+      assert.equal(await review.getByRole('heading', { name: 'Older pending submission' }).count(), 0)
+      assert.equal(await review.getByRole('button', { name: 'Approve all (1)' }).isEnabled(), true)
+      assert.equal(new URL(page.url()).pathname, '/line-manager/dashboard')
+      await review.getByRole('button', { name: 'Close', exact: true }).click()
+      assert.equal(await reviewOpener.evaluate((node) => node === document.activeElement), true)
+      await page.getByRole('button', { name: 'View approvals' }).click()
+      await page.getByRole('button', { name: `Review ${fixture.ownerName}`, exact: true }).click()
+      await review.getByText('This task can be reviewed once its frozen week is available.').waitFor()
+      await review.getByRole('heading', { name: 'Older pending submission' }).waitFor()
+      assert.equal(await review.getByRole('button', { name: 'Approve all (1)' }).isEnabled(), true)
       await context.request.post(`${base}/api/auth/sign-out`, { headers: { origin: base }, data: {} })
     } finally {
       await browser?.close()

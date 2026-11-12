@@ -2,7 +2,7 @@ import type { LeaveRecord, Prisma, TrackerSettings, WorkWeek } from '../../src/g
 import type { DashboardMetrics } from '../../src/features/line-manager/dashboard-view.ts'
 import { activeAt, assignmentForWeek, expectedWorkingDays, isoDay, referenceForWeek, shiftDay } from '../data-model/calendar.ts'
 import { weekProjection } from '../employee/calendar.ts'
-import { historyEvidence, historySources, protection, snapshotContext } from '../employee/history-evidence.ts'
+import { historyEvidence, historyPeople, protection, snapshotContext } from '../employee/history-evidence.ts'
 import type { SnapshotContext } from '../employee/history-evidence.ts'
 import { employeeAssignment, employeeSelect, teamWhere } from './scope.ts'
 import type { TeamEmployee, Tx } from './scope.ts'
@@ -79,8 +79,15 @@ export async function roster(tx: Tx, dates: Date[], current: Date, manager: { us
     { assignment: { role: 'EMPLOYEE', managerId: manager.userId } },
     { contextSnapshot: { path: ['managerId'], equals: manager.userId } },
     { userId: { in: candidates.map(({ id }) => id) } },
-  ] }, select: { userId: true, weekId: true, contextSnapshot: true, snapshotAt: true, expectedWorkingDaysSnapshot: true, assignment: { select: { managerId: true, role: true } } } })
+  ] }, include: { assignment: { select: { managerId: true, role: true } } } })
+  const byWeek = new Map<string, typeof trackers>()
+  for (const tracker of trackers) {
+    const entries = byWeek.get(tracker.weekId) ?? []
+    entries.push(tracker)
+    byWeek.set(tracker.weekId, entries)
+  }
   let proof: Awaited<ReturnType<typeof protection>> | undefined
+  let sources: Map<string, Awaited<ReturnType<typeof historyPeople>>[number]> | undefined
   for (const row of frozen) {
     const week = weeks.get(isoDay(row.startsOn))!
     const required = new Set(candidates.filter((person) => {
@@ -88,7 +95,8 @@ export async function roster(tx: Tx, dates: Date[], current: Date, manager: { us
       return assignment?.role === 'EMPLOYEE' && assignment.managerId === manager.userId && activeAt(person, new Date(row.freezesAt.getTime() - 1))
     }).map(({ id }) => id))
     let reliable = !!row.rosterCapturedAt && row.rosterCapturedAt >= row.freezesAt
-    for (const tracker of trackers.filter(({ weekId }) => weekId === row.id)) {
+    const weekTrackers = byWeek.get(row.id) ?? []
+    for (const tracker of weekTrackers) {
       const context = snapshotContext(tracker.contextSnapshot, tracker.userId)
       const days = tracker.expectedWorkingDaysSnapshot
       const valid = context && tracker.snapshotAt && tracker.snapshotAt >= row.freezesAt && days !== null && Number.isInteger(days) && days >= 0 && days <= 5
@@ -102,9 +110,11 @@ export async function roster(tx: Tx, dates: Date[], current: Date, manager: { us
     }
     if (history && required.size && !proof) proof = await protection(tx)
     if (proof?.valid && proof.startedAt && proof.settings?.trackingStartsOn
-      && row.startsOn >= proof.settings.trackingStartsOn && row.freezesAt >= proof.startedAt) {
+      && row.startsOn >= proof.settings.trackingStartsOn && row.freezesAt >= proof.startedAt && required.size) {
+      sources ??= new Map((await historyPeople(tx, candidates.map(({ id }) => id))).map((person) => [person.id, person]))
+      const byOwner = new Map(weekTrackers.map((tracker) => [tracker.userId, tracker]))
       for (const userId of required) {
-        const evidence = historyEvidence(await historySources(tx, userId, row.id), row, proof, manager.at)
+        const evidence = historyEvidence({ person: sources.get(userId) ?? null, tracker: byOwner.get(userId) ?? null }, row, proof, manager.at)
         const context = evidence.context
         if (evidence.code === 'CAPTURE_PENDING' && context?.managerId === manager.userId && context.role === 'EMPLOYEE'
           && context.accountStatus === 'ACTIVE') week.pending.set(userId, { id: userId, name: context.displayName, unitName: context.unitName! })
@@ -139,7 +149,7 @@ export function scopedTasks(weeks: Week[]): Prisma.WeeklyTaskWhereInput {
   })) }
 }
 
-export async function reporting(tx: Tx, dates: Date[], current: Date, manager: Parameters<typeof roster>[3], settings: TrackerSettings, history = false) {
+export async function reporting(tx: Tx, dates: Date[], current: Date, manager: Parameters<typeof roster>[3], settings: TrackerSettings, history = false, personId?: string) {
   const rosters = await roster(tx, dates, current, manager, settings, { history })
   const weeks = new Map<string, ReportingWeek>()
   const byId = new Map<string, ReportingWeek>()
@@ -148,7 +158,9 @@ export async function reporting(tx: Tx, dates: Date[], current: Date, manager: P
     weeks.set(date, week)
     if (week.stored) byId.set(week.stored.id, week)
   }
-  const trackers = await tx.weeklyTracker.findMany({ where: { OR: [...byId].filter(([, week]) => week.members.size).map(([weekId, week]) => ({ weekId, userId: { in: [...week.members.keys()] } })) },
+  const trackers = await tx.weeklyTracker.findMany({ where: { OR: [...byId].flatMap(([weekId, week]) => personId
+    ? (week.members.has(personId) ? [{ weekId, userId: { in: [personId] } }] : [])
+    : week.members.size ? [{ weekId, userId: { in: [...week.members.keys()] } }] : []) },
     select: { id: true, weekId: true, userId: true } })
   const trackerById = new Map(trackers.map((tracker) => [tracker.id, tracker]))
   const counts = await tx.weeklyTask.groupBy({ by: ['trackerId', 'ownerId', 'status'], where: { deletedAt: null, trackerId: { in: [...trackerById.keys()] } }, _count: { _all: true } })

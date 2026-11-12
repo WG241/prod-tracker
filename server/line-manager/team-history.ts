@@ -34,7 +34,7 @@ export async function readTeamHistory(db: PrismaClient, actor: Actor, url: strin
     const { principal, settings } = await setup(tx, actor)
     const { at } = principal
     const query = teamHistoryQuery(url, at, false)
-    const weeks = [...(await reporting(tx, query.included, query.current, principal, settings, true)).values()]
+    const weeks = [...(await reporting(tx, query.included, query.current, principal, settings, true, query.personId ?? undefined)).values()]
     const unavailableWeeks: string[] = [], notOpenWeeks: string[] = [], outsideCoverageWeeks: string[] = []
     const rows: TeamHistoryRow[] = []
     let expected = 0, submitted = 0, approved = 0, eligible = 0, personWeeks = 0

@@ -94,30 +94,6 @@ test('AC7 tracker and audit insertion failure rolls the capture unit back', asyn
   assert.equal(await db.weeklyTracker.count({ where: { userId: ids[3], weekId } }), 0)
   assert.equal((await capturePerson(db, weekId, ids[3])).code, 'CAPTURED')
 })
-test('AC5,6,7 complete roster includes all roles, inactive and zero task people, and completion repeats once', async () => {
-  const required = await db.employmentAssignment.findMany({ where: { effectiveFrom: { lt: freeze }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: watMidnight(parent) } }] }, distinct: ['userId'], select: { userId: true } })
-  for (const { userId } of required) {
-    const result = await capturePerson(db, weekId, userId)
-    assert.ok(['CAPTURED', 'ALREADY_CAPTURED'].includes(result.code), `${userId}: ${result.code}`)
-  }
-  const full = await db.weeklyTracker.findUniqueOrThrow({ where: { userId_weekId: { userId: ids[1], weekId } } })
-  const inactive = await db.weeklyTracker.findUniqueOrThrow({ where: { userId_weekId: { userId: ids[2], weekId } } })
-  assert.equal(full.expectedWorkingDaysSnapshot, 0); assert.equal(inactive.expectedWorkingDaysSnapshot, 0)
-  assert.equal(await db.weeklyTask.count({ where: { trackerId: full.id } }), 0)
-  let release: () => void = () => {}, reached: () => void = () => {}
-  const ready = new Promise<void>((resolve) => { reached = resolve }), gate = new Promise<void>((resolve) => { release = resolve })
-  const assignmentWriter = db.$transaction(async (tx) => { await tx.$executeRaw`LOCK TABLE "EmploymentAssignment" IN ROW EXCLUSIVE MODE`; reached(); await gate })
-  await ready
-  try { assert.equal((await completeRoster(db, weekId)).code, 'RETRY_LATER') } finally { release(); await assignmentWriter }
-  const failing = db.$extends({ query: { auditEvent: { async create({ args, query }) { await query(args); throw new Error('Isolated roster audit failure') } } } }) as unknown as PrismaClient
-  await assert.rejects(completeRoster(failing, weekId))
-  assert.equal((await db.workWeek.findUniqueOrThrow({ where: { id: weekId } })).rosterCapturedAt, null)
-  assert.equal(await db.auditEvent.count({ where: { action: 'WEEK_ROSTER_CAPTURED', targetId: weekId } }), 0)
-  const result = await Promise.all([completeRoster(db, weekId), completeRoster(db, weekId)])
-  assert.equal(result.filter((r) => r.changed).length, 1)
-  assert.equal(await db.auditEvent.count({ where: { action: 'WEEK_ROSTER_CAPTURED', targetId: weekId } }), 1)
-  assert.equal(await db.weeklyTracker.count({ where: { weekId } }), required.length)
-})
 test('AC5,6 historical source guards reject retroactive changes but permit safe later events', async () => {
   await assert.rejects(db.employmentAssignment.update({ where: { id: assignmentId }, data: { role: 'LINE_MANAGER', managerId: null } }))
   await assert.rejects(db.employmentAssignment.delete({ where: { id: assignmentId } }))
@@ -208,6 +184,30 @@ test('AC1,2,3,6,8 real History API filters, pages, distinct carries, long task a
   const empty = await readHistory(db, safeContext(staff, new Date(Date.now() + 60000)), historyQuery('/history?week=2099-01-05'), new Date())
   assert.equal(empty.selectedWeekState, 'NOT_FROZEN')
 })
+test('AC5,6,7 complete roster includes all roles, inactive and zero task people, and completion repeats once', async () => {
+  const required = await db.employmentAssignment.findMany({ where: { effectiveFrom: { lt: freeze }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: watMidnight(parent) } }] }, distinct: ['userId'], select: { userId: true } })
+  for (const { userId } of required) {
+    const result = await capturePerson(db, weekId, userId)
+    assert.ok(['CAPTURED', 'ALREADY_CAPTURED'].includes(result.code), `${userId}: ${result.code}`)
+  }
+  const full = await db.weeklyTracker.findUniqueOrThrow({ where: { userId_weekId: { userId: ids[1], weekId } } })
+  const inactive = await db.weeklyTracker.findUniqueOrThrow({ where: { userId_weekId: { userId: ids[2], weekId } } })
+  assert.equal(full.expectedWorkingDaysSnapshot, 0); assert.equal(inactive.expectedWorkingDaysSnapshot, 0)
+  assert.equal(await db.weeklyTask.count({ where: { trackerId: full.id } }), 0)
+  let release: () => void = () => {}, reached: () => void = () => {}
+  const ready = new Promise<void>((resolve) => { reached = resolve }), gate = new Promise<void>((resolve) => { release = resolve })
+  const assignmentWriter = db.$transaction(async (tx) => { await tx.$executeRaw`LOCK TABLE "EmploymentAssignment" IN ROW EXCLUSIVE MODE`; reached(); await gate })
+  await ready
+  try { assert.equal((await completeRoster(db, weekId)).code, 'RETRY_LATER') } finally { release(); await assignmentWriter }
+  const failing = db.$extends({ query: { auditEvent: { async create({ args, query }) { await query(args); throw new Error('Isolated roster audit failure') } } } }) as unknown as PrismaClient
+  await assert.rejects(completeRoster(failing, weekId))
+  assert.equal((await db.workWeek.findUniqueOrThrow({ where: { id: weekId } })).rosterCapturedAt, null)
+  assert.equal(await db.auditEvent.count({ where: { action: 'WEEK_ROSTER_CAPTURED', targetId: weekId } }), 0)
+  const result = await Promise.all([completeRoster(db, weekId), completeRoster(db, weekId)])
+  assert.equal(result.filter((r) => r.changed).length, 1)
+  assert.equal(await db.auditEvent.count({ where: { action: 'WEEK_ROSTER_CAPTURED', targetId: weekId } }), 1)
+  assert.equal(await db.weeklyTracker.count({ where: { weekId } }), required.length)
+})
 test('AC7 scoped diagnostics and retry preserve evidence and do not mark unrelated rosters', async () => {
   const before = await db.auditEvent.count()
   const diagnostic = await historyPass(db, historyCursor(), false, { week: isoDay(parent), userId: ids[0] })
@@ -283,6 +283,11 @@ test('synchronous close publishes immutable week, person, task, comment and revi
   assert.equal(snapshot.persons.length, (await db.weeklyTracker.count({ where: { weekId } })))
   const trackerIds = (await db.weeklyTracker.findMany({ where: { weekId }, select: { id: true } })).map((row) => row.id)
   assert.equal(snapshot.tasks.length, await db.weeklyTask.count({ where: { trackerId: { in: trackerIds }, deletedAt: null } }))
+  const staff = await staffContext(db, ids[0]); assert.ok(staff)
+  const history = await readHistory(db, safeContext(staff, new Date(Date.now() + 60000)),
+    historyQuery(`/history?week=${isoDay(parent)}&status=APPROVED`), await databaseClock(db))
+  assert.equal(history.records.total, 1)
+  assert.deepEqual(history.records.items.map(({ id, ownerName }) => [id, ownerName]), [[taskId, 'Recorded 0']])
   assert.equal((await closeHistoryWeek(db, weekId)).code, 'ALREADY_CAPTURED')
   await assert.rejects(db.historyTaskSnapshot.update({ where: { id: snapshot.tasks[0]?.id ?? 'missing' }, data: { title: 'rewrite' } }))
 })
